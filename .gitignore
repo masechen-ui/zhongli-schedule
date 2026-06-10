@@ -1,0 +1,17 @@
+# 系統檔案
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 編輯器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 備份檔
+*.bak
+schedule-backup-*.html
+schedule-system-v[0-9]*.html
+
+# 不追蹤舊版本（只保留 index.html）
