@@ -7,7 +7,7 @@
 
 ## 🌐 線上網址
 
-> 部署後填入：`https://[你的GitHub帳號].github.io/zhongli-schedule/`
+> 部署後填入：`https://masechen-ui.github.io/zhongli-schedule/`
 
 ---
 
