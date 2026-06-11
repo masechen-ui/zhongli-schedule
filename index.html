@@ -171,15 +171,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   // ── Firebase 設定 ──────────────────────────────
   // 請填入你的 Firebase 專案設定值
   // 取得方式：Firebase Console → 專案設定 → 您的應用程式
-  const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyAouhpSMvx_5hLgcyKMIXby3xnrSlLwXAY",
-    authDomain: "schedule-af163.firebaseapp.com",
-    projectId: "schedule-af163",
-    storageBucket: "schedule-af163.firebasestorage.app",
-    messagingSenderId: "998984586614",
-    appId: "1:998984586614:web:b57156c73c4719d8529657",
-    measurementId: "G-ZBECW54RBK"
-  };
+  const firebaseConfig = {
+  apiKey: "AIzaSyAouhpSMvx_5hLgcyKMIXby3xnrSlLwXAY",
+  authDomain: "schedule-af163.firebaseapp.com",
+  projectId: "schedule-af163",
+  storageBucket: "schedule-af163.firebasestorage.app",
+  messagingSenderId: "998984586614",
+  appId: "1:998984586614:web:b57156c73c4719d8529657",
+  measurementId: "G-ZBECW54RBK"
+};
   // ───────────────────────────────────────────────
 
   // 偵測是否已填入設定（避免未設定時報錯）
@@ -1267,10 +1267,7 @@ function renderScheduleAll(){
     return {...g,staff,hours};
   });
   // 舊變數相容（總表 warning 合併用）
-  const g1Staff=groupsData[0]?.staff||[];
-  const g2Staff=groupsData[1]?.staff||[];
-  const g1Hours=groupsData[0]?.hours||0;
-  const g2Hours=groupsData[1]?.hours||0;
+  const totalHours=groupsData.reduce((a,g)=>a+g.hours,0);
 
   if(!hasData) return `
     <div class="page-header">
@@ -1292,7 +1289,7 @@ function renderScheduleAll(){
   <div class="page-header">
     <div>
       <div class="page-title">📋 中壢課總表</div>
-      <div class="page-sub">${y}年${m}月 · 統合唯讀 · 貞文組${g1Staff.length}人 / 秋玉組${g2Staff.length}人</div>
+      <div class="page-sub">${y}年${m}月 · 統合唯讀 · ${groupsData.map(g=>`${g.name}${g.staff.length}人`).join(' / ')}</div>
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-outline" onclick="exportExcelAll()">⬇ Excel（全員）</button>
@@ -1300,20 +1297,16 @@ function renderScheduleAll(){
     </div>
   </div>
   ${nav}
-  <div style="display:flex;gap:16px;margin-bottom:12px">
-    <div class="stat-card" style="flex:1;padding:10px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">貞文組總工時</div>
-      <div style="font-size:20px;font-weight:700;color:#C0392B">${g1Hours}h</div>
-      <div style="font-size:11px;color:var(--text2)">${g1Staff.length}人 · 目標${g1Staff.length*80}h</div>
-    </div>
-    <div class="stat-card" style="flex:1;padding:10px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">秋玉組總工時</div>
-      <div style="font-size:20px;font-weight:700;color:#7D3C98">${g2Hours}h</div>
-      <div style="font-size:11px;color:var(--text2)">${g2Staff.length}人 · 目標${g2Staff.length*80}h</div>
-    </div>
-    <div class="stat-card" style="flex:1;padding:10px">
+  <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+    ${groupsData.map(g=>`
+    <div class="stat-card" style="flex:1;min-width:120px;padding:10px">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${g.name}總工時</div>
+      <div style="font-size:20px;font-weight:700;color:${g.color||'var(--accent)'}">${g.hours}h</div>
+      <div style="font-size:11px;color:var(--text2)">${g.staff.length}人 · 目標${g.staff.length*80}h</div>
+    </div>`).join('')}
+    <div class="stat-card" style="flex:1;min-width:120px;padding:10px">
       <div style="font-size:11px;color:var(--text2);margin-bottom:4px">全課總工時</div>
-      <div style="font-size:20px;font-weight:700;color:var(--accent)">${g1Hours+g2Hours}h</div>
+      <div style="font-size:20px;font-weight:700;color:var(--accent)">${totalHours}h</div>
       <div style="font-size:11px;color:var(--text2)">${allStaff.length}人 · 目標${allStaff.length*80}h</div>
     </div>
   </div>
@@ -2129,20 +2122,18 @@ function renderHistoryMonth(y,m){
 
 // ==================== 人員指派 ====================
 function renderAssign(){
+  const groups=getAllGroups();
   return `
   <div class="page-header">
     <div><div class="page-title">🔗 人員固定指派</div><div class="page-sub">設定每位員工固定分配的店家，自動排班時優先安排</div></div>
   </div>
   <div class="alert alert-info">ℹ️ 固定指派的員工在自動排班時會優先排到指定店家。若員工有多間指派店家，系統會輪流安排。未指派的員工可補到任何同組店家。</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+    ${groups.map(g=>`
     <div class="card">
-      <div class="card-title">貞文組</div>
-      ${renderAssignGroup('g1')}
-    </div>
-    <div class="card">
-      <div class="card-title">秋玉組</div>
-      ${renderAssignGroup('g2')}
-    </div>
+      <div class="card-title" style="color:${g.color||'var(--accent)'};border-left:3px solid ${g.color||'var(--accent)'};padding-left:8px">${g.name}</div>
+      ${renderAssignGroup(g.id)}
+    </div>`).join('')}
   </div>`;
 }
 
@@ -2373,13 +2364,23 @@ function deleteGroup(gid){
 // ==================== 人員管理 ====================
 function renderStaff(){
   const y=STATE.currentYear,m=STATE.currentMonth;
+  const groups=getAllGroups();
+  const officeStaff=STATE.staff.filter(s=>s.groupId==='office');
   return `
   <div class="page-header">
     <div><div class="page-title">👥 人員管理</div><div class="page-sub">共 ${STATE.staff.length} 位</div></div>
     <button class="btn btn-primary" onclick="openAddStaffModal()">＋ 新增人員</button>
   </div>
-  <div class="card"><div class="card-title">貞文組</div>${renderStaffTable('g1',y,m)}</div>
-  <div class="card"><div class="card-title">秋玉組</div>${renderStaffTable('g2',y,m)}</div>`;
+  ${groups.map(g=>`
+  <div class="card">
+    <div class="card-title" style="color:${g.color||'var(--accent)'};border-left:3px solid ${g.color||'var(--accent)'};padding-left:8px">${g.name}</div>
+    ${renderStaffTable(g.id,y,m)}
+  </div>`).join('')}
+  ${officeStaff.length?`
+  <div class="card">
+    <div class="card-title">辦公室</div>
+    ${renderStaffTable('office',y,m)}
+  </div>`:''}`;
 }
 
 function renderStaffTable(gid,y,m){
@@ -2416,6 +2417,7 @@ function renderStaffTable(gid,y,m){
 
 // ==================== 店家管理 ====================
 function renderStores(){
+  const groups=getAllGroups();
   return `
   <div class="page-header">
     <div><div class="page-title">🏪 店家管理</div><div class="page-sub">共 ${STATE.stores.length} 間</div></div>
@@ -2424,8 +2426,11 @@ function renderStores(){
       <button class="btn btn-primary" onclick="openAddStoreModal()">＋ 新增店家</button>
     </div>
   </div>
-  <div class="card"><div class="card-title">貞文組</div>${renderStoreTable('g1')}</div>
-  <div class="card"><div class="card-title">秋玉組</div>${renderStoreTable('g2')}</div>`;
+  ${groups.map(g=>`
+  <div class="card">
+    <div class="card-title" style="color:${g.color||'var(--accent)'};border-left:3px solid ${g.color||'var(--accent)'};padding-left:8px">${g.name}</div>
+    ${renderStoreTable(g.id)}
+  </div>`).join('')}`;
 }
 
 function renderStoreTable(gid){
@@ -2736,7 +2741,7 @@ function storeFormHTML(s){
     <div class="form-group"><label>通路</label><select id="m-channel">${CHANNEL_LIST.map(c=>`<option value="${c.value}" ${v('channel','dept')===c.value?'selected':''}>${c.label}</option>`).join('')}</select></div>
     <div class="form-group"><label>平日關店（24h）</label><input id="m-close" type="text" maxlength="5" placeholder="21:30" value="${v('close','21:30')}"></div>
     <div class="form-group"><label>六日關店（24h）</label><input id="m-close-wkd" type="text" maxlength="5" placeholder="21:30" value="${closeWkd}"></div>
-    <div class="form-group"><label>所屬組</label><select id="m-sgroup">${getAllGroups().map(g=>`<option value="${g.id}" ${v('groupId','g1')===g.id?'selected':''}>${g.name}</option>`).join('')}<option value="office" ${v('groupId','g1')==='office'?'selected':''}>辦公室</option></select></div>
+    <div class="form-group"><label>所屬組</label><select id="m-sgroup">${getAllGroups().map(g=>`<option value="${g.id}" ${v('groupId',getAllGroups()[0]?.id||'')===g.id?'selected':''}>${g.name}</option>`).join('')}<option value="office" ${v('groupId',getAllGroups()[0]?.id||'')==='office'?'selected':''}>辦公室</option></select></div>
     <div class="form-group"><label>派員</label><select id="m-alloc">${STAFF_ALLOC_LIST.map(a=>`<option value="${a}" ${v('staffAlloc',1)==a?'selected':''}>${a===1?'1（全月常駐）':a===0.5?'0.5（約9天）':a}</option>`).join('')}</select></div>
     <div class="form-group"><label>每日最少人數</label><input id="m-min" type="number" min="0" max="5" value="${v('minDaily',1)}"></div>
     <div class="form-group"><label>最多人數</label><input id="m-max" type="number" min="1" max="5" value="${v('maxStaff',3)}"></div>
@@ -2930,7 +2935,7 @@ function openAddSpecialModal(){
   showModal(`<div class="modal">
     <div class="modal-title">新增特殊安排</div>
     <div class="form-grid">
-      <div class="form-group"><label>人員</label><select id="m-sid">${STATE.staff.map(s=>`<option value="${s.id}">${s.name}（${s.groupId==='g1'?'貞文組':'秋玉組'}）</option>`).join('')}</select></div>
+      <div class="form-group"><label>人員</label><select id="m-sid">${STATE.staff.map(s=>{const g=STATE.groups.find(x=>x.id===s.groupId);return `<option value="${s.id}">${s.name}（${g?g.name:s.groupId==='office'?'辦公室':'未分組'}）</option>`;}).join('')}</select></div>
       <div class="form-group"><label>日期</label><input id="m-date" type="date" value="${y}-${pad(m)}-01"></div>
       <div class="form-group"><label>類型</label><select id="m-type"><option value="leave">特休</option><option value="meeting">開會（回總公司）</option><option value="training">教育實習</option></select></div>
       <div class="form-group"><label>備註</label><input id="m-note" placeholder="選填"></div>
