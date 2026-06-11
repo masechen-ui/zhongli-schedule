@@ -408,16 +408,13 @@ function isAdmin(){return STATE.login.role==='admin';}
 // ==================== 初始資料 ====================
 function initData(){
   STATE.shifts=[
-    // hours = 實際計薪時數（不含用餐）
-    // 百貨 A班：開店~21:30，扣用餐1h，計薪10h（平日）；假日前一天/週五六關23:00，計薪10h
-    // 專櫃 A班：開店~21:00，扣用餐0.5h，計薪8.5h 左右（依店而定，預設用9h）
-    // P班：下午~21:30，扣用餐0.5h，計薪9h（P9）；假日前一天關23:00，計薪10h（P10）
-    // O班：全天開到關，扣用餐1h
-    {id:'s1',name:'A班',code:'A',start:'11:00',end:'21:30',hours:10},
-    {id:'s3',name:'P班',code:'P',start:'16:00',end:'21:30',hours:9},
-    {id:'s4',name:'O班',code:'O',start:'11:00',end:'21:30',hours:10},
-    {id:'s5',name:'C班',code:'C',start:'',end:'',hours:4,note:'特殊班：打烊前回去，無開店'},
-    {id:'s6',name:'B班',code:'B',start:'',end:'',hours:8,note:'上課後回去上班'},
+    // 班別只定義代碼，時數由「店家 APOC 開始時間 + 關店時間」動態計算
+    // 計算函數：calcCellHours(store, shiftCode, dow)
+    {id:'s1',name:'A班',code:'A'},
+    {id:'s3',name:'P班',code:'P'},
+    {id:'s4',name:'O班',code:'O'},
+    {id:'s5',name:'C班',code:'C',note:'特殊班：打烊前回去，無開店'},
+    {id:'s6',name:'B班',code:'B',note:'上課後回去上班'},
   ];
   // 組別設定（動態，可新增/編輯/刪除）
   STATE.groups=[
@@ -625,8 +622,8 @@ function calcPeriodHours(staffId, periodStart, periodEnd){
     const ms = STATE.schedules[schedKey(y,mo)]||{};
     const c = (ms[staffId]||{})[d];
     if(c&&c.type==='work'&&c.shiftId){
-      const sh = STATE.shifts.find(x=>x.id===c.shiftId);
-      if(sh) h += sh.hours;
+      const stx=STATE.stores.find(q=>q.id===c.storeId);
+      const dwx=new Date(cur).getDay();h+=getCellWorkH(c,stx,dwx);
     }
     cur.setDate(cur.getDate()+1);
   }
@@ -664,28 +661,89 @@ function genGroupId(){
   while(existing.includes(`g${n}`)) n++;
   return `g${n}`;
 }
-// 取得某店某班某天的上班開始時間
+// 取得某店某班某天的上班開始時間（HH:MM 字串）
 // 優先讀 store.shiftTimes，其次讀全域 storeShiftTimes
 function getShiftStartTime(storeNo, shiftCode, dow){
   const dowKey=['sun','mon','tue','wed','thu','fri','sat'][dow];
-  // 先找 store 物件的 shiftTimes
   const store=STATE.stores.find(x=>x.storeNo===storeNo);
   const localTimes=store?.shiftTimes?.[shiftCode];
   if(localTimes&&localTimes[dowKey]) return localTimes[dowKey];
-  // 退回全域
   const globalTimes=STATE.storeShiftTimes?.[storeNo]?.[shiftCode];
   if(globalTimes&&globalTimes[dowKey]) return globalTimes[dowKey];
   return null;
 }
-// 取得班別計薪時數（8h固定）
-function getShiftPayHours(c){
-  if(!c||c.type!=='work')return 0;
-  return 8; // 固定8h計薪
+
+// 將 "HH:MM" 轉成分鐘數
+function toMin(timeStr){
+  if(!timeStr) return null;
+  const [h,m]=(timeStr||'').split(':').map(Number);
+  return h*60+(m||0);
 }
 
+// ★ 核心：動態計算某店某班某天的服勤時數和用餐時數
+// store: 店家物件；shiftCode: 'A'|'P'|'O'|'C'；dow: 0-6（0=日）
+// 回傳 { workH, mealH } 均為小數（如 8.5, 0.5）
+function calcShiftHours(store, shiftCode, dow){
+  if(!store||!shiftCode) return {workH:0, mealH:0};
+  const weekend=(dow===0||dow===6);
+  // 關店時間：週末可能不同
+  const closeStr=weekend?(store.closeWeekend||store.close):store.close;
+  const closeM=toMin(closeStr);
+  if(closeM===null) return {workH:0, mealH:0};
+
+  // 開始時間：從 APOC 設定讀取
+  const startStr=getShiftStartTime(store.storeNo, shiftCode, dow);
+  // 如果沒有設定此班的開始時間，fallback 到店家開店時間（A/O班）
+  const openStr=store.open||'10:00';
+  const startM=toMin(startStr||openStr);
+
+  // 在店總時數（分鐘）
+  const totalMin=closeM-startM;
+  if(totalMin<=0) return {workH:0, mealH:0};
+
+  const totalH=totalMin/60;
+  // 用餐時間：在店超過8小時 → 1小時；否則 → 0.5小時
+  const mealH=totalH>8?1:0.5;
+  const workH=Math.round((totalH-mealH)*2)/2; // 四捨五入到 0.5
+
+  return {workH, mealH};
+}
+
+// 從 CellData 取得服勤時數（用於統計顯示和 Excel 匯出）
+// c: CellData；store: 店家物件；dow: 0-6
+function getCellWorkH(c, store, dow){
+  if(!c||c.type!=='work') return 0;
+  // 若有手動覆寫時數，優先用手動值
+  if(c.customHours!=null) return c.customHours;
+  const sh=STATE.shifts.find(x=>x.id===c.shiftId);
+  if(!sh) return 0;
+  if(!store) return 0;
+  return calcShiftHours(store, sh.code, dow).workH;
+}
+
+// 從 CellData 取得用餐時數
+function getCellMealH(c, store, dow){
+  if(!c||c.type!=='work') return 0;
+  if(c.customMeal!=null) return c.customMeal;
+  const sh=STATE.shifts.find(x=>x.id===c.shiftId);
+  if(!sh) return 0;
+  if(!store) return 0;
+  return calcShiftHours(store, sh.code, dow).mealH;
+}
+
+// 計算某人某月總服勤時數
 function calcHours(sid,y,m){
-  const d=getSD(sid,y,m);let h=0;
-  for(const day in d){const c=d[day];if(c.type==='work'&&c.shiftId){const sh=STATE.shifts.find(s=>s.id===c.shiftId);if(sh)h+=sh.hours}}
+  const sd=getSD(sid,y,m);
+  const ms_all=STATE.schedules[schedKey(y,m)]||{};
+  let h=0;
+  for(const day in sd){
+    const c=sd[day];
+    if(c&&c.type==='work'&&c.shiftId){
+      const store=STATE.stores.find(x=>x.id===c.storeId);
+      const dow=getDOW(y,m,parseInt(day));
+      h+=getCellWorkH(c,store,dow);
+    }
+  }
   return h;
 }
 
@@ -698,14 +756,15 @@ function storeHoursLimit(staffAlloc, monthDays){
 function calcStoreHoursMonth(storeId, y, m){
   const days=daysInMonth(y,m);
   const ms=STATE.schedules[schedKey(y,m)]||{};
+  const store=STATE.stores.find(x=>x.id===storeId);
   let total=0;
   STATE.staff.forEach(s=>{
     const sd=ms[s.id]||{};
     for(let d=1;d<=days;d++){
       const c=sd[d];
       if(c&&c.type==='work'&&c.storeId===storeId&&c.shiftId){
-        const sh=STATE.shifts.find(x=>x.id===c.shiftId);
-        if(sh) total+=sh.hours;
+        const dow=getDOW(y,m,d);
+        total+=getCellWorkH(c,store,dow);
       }
     }
   });
@@ -726,32 +785,6 @@ function getAssignedStores(sid){return STATE.staffAssignments[sid]||[]}
 function setAssignedStores(sid,storeIds){STATE.staffAssignments[sid]=storeIds}
 
 // ==================== 自動排班 ====================
-// 判斷是否為假日前一天（週五或隔天是週日）→ 延長營業
-function isExtendedDay(y,m,d){
-  const dow=getDOW(y,m,d);
-  if(dow===5) return true;
-  const tomorrow=new Date(y,m-1,d+1);
-  if(tomorrow.getDay()===0) return true;
-  return false;
-}
-
-// 取得班別計薪時數（依通路、是否假日前一天）
-function getShiftHours(shiftCode, channel, extended){
-  const isCounter=(channel==='counter');
-  if(shiftCode==='A') return isCounter ? 9 : 10;
-  if(shiftCode==='P') return (extended && !isCounter) ? 10 : 9;
-  if(shiftCode==='O') return 10;
-  return 8;
-}
-
-// 取得用餐時數
-function getMealHours(shiftCode, channel, extended){
-  const isCounter=(channel==='counter');
-  if(shiftCode==='A') return isCounter ? 0.5 : 1;
-  if(shiftCode==='P') return (extended && !isCounter) ? 1 : 0.5;
-  if(shiftCode==='O') return 1;
-  return 0.5;
-}
 
 function autoScheduleGroup(y,m,gid){
   const days=daysInMonth(y,m);
@@ -820,11 +853,9 @@ function autoScheduleGroup(y,m,gid){
       const c=sd[day];
       if(c&&c.type==='work'&&c.shiftId){
         const pidx=getBiweeklyIdxForDay(y,m,parseInt(day),periods);
-        const sh=STATE.shifts.find(x=>x.id===c.shiftId);
-        const store=storeList.find(st=>st.id===c.storeId)||{channel:'dept'};
-        const extended=isExtendedDay(y,m,parseInt(day));
-        const shCode=sh?.code||'A';
-        const h=getShiftHours(shCode, store.channel, extended);
+        const store=storeList.find(st=>st.id===c.storeId);
+        const dow=getDOW(y,m,parseInt(day));
+        const h=getCellWorkH(c,store,dow);
         periodWorkedH[s.id][pidx]=(periodWorkedH[s.id][pidx]||0)+h;
         const wk=Math.floor((parseInt(day)-1)/7);
         weekWorked[`${s.id}_${wk}`]=(weekWorked[`${s.id}_${wk}`]||0)+1;
@@ -832,33 +863,67 @@ function autoScheduleGroup(y,m,gid){
     }
   });
 
-  // ⑥ 排公休：在每個雙週區間內，確保不連上6天且每週≤48h
-  // 策略：每連上5天插一天公休，直到達到公休目標天數
+  // ⑥ 排公休：先計算每人整個月的目標公休天數，再均勻分配
+  // 目標：每雙週4天公休（14天 - 10工作天）
+  // 特休/會議/訓練已佔用的天不計入「工作天」，公休仍需補足
   staffList.forEach(s=>{
     periods.forEach(p=>{
-      const periodDays=p.days;
-      // 目標公休天數（雙週14天對應4公休，依在本月天數等比）
-      const offTarget=Math.round((periodDays.length/14)*4);
+      const periodDays=p.days; // 本月內的日期陣列
+
+      // 計算此週期目標公休天數
+      // 完整雙週（14天）= 4天公休；跨月週期等比例
+      const offTarget=Math.max(1, Math.round((periodDays.length/14)*4));
+
+      // 計算此週期已有的「非上班」天（特休/開會/訓練 = 視為休息，不需再加公休）
+      const specialCount=periodDays.filter(d=>{
+        const c=ms[s.id]?.[d];
+        return c&&(c.type==='leave'||c.type==='meeting'||c.type==='training');
+      }).length;
+
+      // 扣掉特休等，實際需要補的公休天數
+      const needOff=Math.max(0, offTarget-specialCount);
+      if(needOff===0) return;
+
+      // 可放公休的天（目前空的格子）
+      const available=periodDays.filter(d=>!ms[s.id]?.[d]);
+      if(available.length===0) return;
+
+      // 均勻分配公休：在可用天中，以等距方式選出 needOff 天
+      // 同時確保不連上6天（若發現連續5天空格，強制在第6天插休）
       let offCount=0;
+      const step=Math.max(1, Math.floor(available.length/(needOff+1)));
+      // 第一波：等距插入
+      for(let i=step; i<available.length&&offCount<needOff; i+=step){
+        ms[s.id][available[i]]={type:'off'};
+        offCount++;
+      }
+      // 第二波：若還不夠，補在剩餘空格的前面
+      for(let i=0; i<available.length&&offCount<needOff; i++){
+        if(!ms[s.id]?.[available[i]]){
+          ms[s.id][available[i]]={type:'off'};
+          offCount++;
+        }
+      }
+
+      // 最後：掃一次，確保沒有連續6天（連上5天就強制插休）
       let consecutive=0;
+      let lastDay=0;
       for(let di=0;di<periodDays.length;di++){
         const d=periodDays[di];
-        if(ms[s.id]?.[d]){
-          const c=ms[s.id][d];
-          // 特休/開會/訓練算休息，重置連續計數
-          if(c.type!=='work') consecutive=0;
-          else consecutive++;
-          continue;
-        }
-        if(offCount>=offTarget) continue; // 已達目標，繼續留空讓後面排班填入
-        if(consecutive>=5){
-          // 連上5天了，強制休
-          ms[s.id][d]={type:'off'};
-          offCount++;
-          consecutive=0;
+        const c=ms[s.id]?.[d];
+        const isRest=c&&c.type!=='work';
+        const isEmpty=!c;
+        if(isRest||isEmpty){
+          // 空格後面會被排班填入，先視為工作計算連續
+          if(isEmpty) consecutive++;
+          else consecutive=0; // 已有休息，重置
         } else {
           consecutive++;
-          // 先不填，讓排班邏輯填班
+        }
+        if(consecutive>=6&&isEmpty){
+          // 連上6天了，強制把這天變公休
+          ms[s.id][d]={type:'off'};
+          consecutive=0;
         }
       }
     });
@@ -872,7 +937,6 @@ function autoScheduleGroup(y,m,gid){
   for(let d=1;d<=days;d++){
     const dow=getDOW(y,m,d);
     const weekend=dow===0||dow===6;
-    const extended=isExtendedDay(y,m,d);
     const wk=Math.floor((d-1)/7);
     const pidx=getBiweeklyIdxForDay(y,m,d,periods);
 
@@ -923,18 +987,29 @@ function autoScheduleGroup(y,m,gid){
       toAssign.forEach((s,idx)=>{
         let shiftCode;
 
+        // ── 班別選擇邏輯 ──
+        // 判斷此店有無設定 P 班開始時間
+        const hasPShift=!!getShiftStartTime(store.storeNo,'P',dow);
+
         if(!isLateStore){
+          // 早關店 → A 班
           shiftCode='A';
-        } else if(store.staffAlloc<=1){
-          // 單人晚關店 → O 班
-          shiftCode='O';
         } else {
-          // 多人晚關店
           const totalOut=alreadyHere.length+toAssign.length;
-          if(totalOut===1){
-            // 只剩1人 → O 班（規則5）
+          if(totalOut===1&&store.staffAlloc>1){
+            // 多人店只剩1人出勤 → O 班（規則5）
             shiftCode='O';
+          } else if(!hasPShift||store.staffAlloc<=1){
+            // 單人店 or 沒有設定P班時間 → A/P 由前日交替決定
+            // 有設定P開始時間 → 可排P；否則一律A
+            if(hasPShift){
+              const prev=getPrevShift(s.id,d,ms);
+              shiftCode=(prev==='P')?'A':'P';
+            } else {
+              shiftCode='A';
+            }
           } else {
+            // 多人晚關店（有P班設定）→ 第1人看前日交替，第2人反向
             if(idx===0){
               const prev=getPrevShift(s.id,d,ms);
               shiftCode=(prev==='P')?'A':'P';
@@ -947,9 +1022,10 @@ function autoScheduleGroup(y,m,gid){
 
         const shiftObj=STATE.shifts.find(x=>x.code===shiftCode)||STATE.shifts[0];
         const shiftId=shiftObj?.id||'s1';
-        const actualHours=getShiftHours(shiftCode, store.channel, extended);
+        const cell={type:'work',storeId:store.id,shiftId};
+        const actualHours=getCellWorkH(cell,store,dow);
 
-        ms[s.id][d]={type:'work',storeId:store.id,shiftId};
+        ms[s.id][d]=cell;
         periodWorkedH[s.id][pidx]=(periodWorkedH[s.id][pidx]||0)+actualHours;
         weekWorked[`${s.id}_${wk}`]=(weekWorked[`${s.id}_${wk}`]||0)+1;
         storeAssigned[store.id][s.id]=(storeAssigned[store.id][s.id]||0)+1;
@@ -981,7 +1057,8 @@ function canAssignBi(s,d,wk,pidx,periodWorkedH,weekWorked,ms,periods){
   if((weekWorked[`${s.id}_${wk}`]||0)>=6)return false;
   const periodH=periodWorkedH[s.id]?.[pidx]||0;
   const period=periods.find(p=>p.idx===pidx);
-  const maxH=period?Math.min(100,period.days.length*10):100;
+  // 雙週工時上限：完整雙週 80h（10天×8h），跨月週期等比
+  const maxH=period?Math.round((period.days.length/14)*80):80;
   if(periodH>=maxH)return false;
   return true;
 }
@@ -1186,7 +1263,7 @@ function buildSchedTable(staffList,y,m,editable=true){
       let h=0;
       p.days.forEach(d=>{
         const c=sd[d];
-        if(c&&c.type==='work'&&c.shiftId){const sh=STATE.shifts.find(x=>x.id===c.shiftId);if(sh)h+=sh.hours}
+        if(c&&c.type==='work'&&c.shiftId){const stx=STATE.stores.find(q=>q.id===c.storeId);const dwx=getDOW(y,m,parseInt(day));h+=getCellWorkH(c,stx,dwx);}
       });
       pHours[p.idx]=h;
     });
@@ -1258,7 +1335,7 @@ function renderScheduleGroup(gid){
       const c=sd[d];
       if(c&&c.type==='work'){
         const sh=STATE.shifts.find(x=>x.id===c.shiftId);
-        const h=sh?sh.hours:8;
+        const stx=STATE.stores.find(q=>q.id===c?.storeId);const dwx=getDOW(y,m,d);const h=getCellWorkH(c,stx,dwx);
         const pidx=getBiweeklyIdxForDay(y,m,d,periods);
         pHours[pidx]=(pHours[pidx]||0)+h;
       }
@@ -1492,7 +1569,7 @@ function renderStoreView(){
       else if(c.type==='leave') leaveDays++;
       else if(c.type==='work'&&c.storeId===store.id){
         const sh=STATE.shifts.find(x=>x.id===c.shiftId);
-        workDays++; workH+=(sh?sh.hours:8); mealH+=0.5;
+        const stx2=STATE.stores.find(q=>q.id===store.id);const dwx2=getDOW(y,m,d);workDays++;workH+=getCellWorkH(c,stx2,dwx2);mealH+=getCellMealH(c,stx2,dwx2);
       }
     }
 
@@ -1540,7 +1617,7 @@ function renderStoreView(){
       const bl=isNewP?'border-left:3px solid var(--accent);':'';
       if(c&&c.type==='work'&&c.storeId===store.id){
         const sh=STATE.shifts.find(x=>x.id===c.shiftId);
-        const h=sh?sh.hours:8;
+        const stx3=STATE.stores.find(q=>q.id===c?.storeId);const dwx3=getDOW(y,m,d);const h=getCellWorkH(c,stx3,dwx3);
         workTimeCells.push(`<td style="${bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${h}</td>`);
       } else {
         workTimeCells.push(`<td style="${bl}background:#F9F9F9;padding:2px"></td>`);
@@ -1821,7 +1898,7 @@ function renderStaffView(){
     if(!c){unscheduled++;continue;}
     if(c.type==='work'){
       const sh=STATE.shifts.find(x=>x.id===c.shiftId);
-      const h=sh?sh.hours:8;
+      const stxs=STATE.stores.find(q=>q.id===c?.storeId);const dwxs=getDOW(y,m,d);const h=getCellWorkH(c,stxs,dwxs);
       workDays++;workH+=h;mealH+=0.5;
       const pidx=getBiweeklyIdxForDay(y,m,d,periods);
       pHours[pidx]=(pHours[pidx]||0)+h;
@@ -1851,7 +1928,7 @@ function renderStaffView(){
   const dateRow=dCells.map(x=>`<th style="min-width:28px;font-size:10px;background:${x.bg};${x.bl}">${x.d}<br><span style="font-size:9px">${DAY_NAMES[x.dow]}</span></th>`).join('');
   const shiftRow=dCells.map(x=>`<td class="${x.shiftCls}" onclick="openCellEdit('${s.id}',${x.d},${y},${m},'staff-view')" title="點擊修改班別" style="${x.bl}cursor:pointer;text-align:center;font-size:11px;font-weight:700;padding:2px">${x.code}</td>`).join('');
   const workRow=dCells.map(x=>{
-    if(x.c?.type==='work'){const sh=STATE.shifts.find(q=>q.id===x.c.shiftId);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${sh?sh.hours:8}</td>`;}
+    if(x.c?.type==='work'){const stxa=STATE.stores.find(q=>q.id===x.c.storeId);const dwxa=getDOW(y,m,d);const ha=getCellWorkH(x.c,stxa,dwxa);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${ha}</td>`;}
     return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">–</td>`;
   }).join('');
   const mealRow=dCells.map(x=>`<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${x.c?.type==='work'?'0.5':''}</td>`).join('');
@@ -2173,7 +2250,7 @@ function renderHistoryMonth(y,m){
     for(let d=1;d<=days;d++){
       const c=sd[d];
       cells.push(renderCell(c,s.id,d,y,m));
-      if(c&&c.type==='work'&&c.shiftId){const sh=STATE.shifts.find(x=>x.id===c.shiftId);if(sh)totalH+=sh.hours}
+      if(c&&c.type==='work'&&c.shiftId){const stxb=STATE.stores.find(q=>q.id===c.storeId);const dwxb=getDOW(y,m,d);totalH+=getCellWorkH(c,stxb,dwxb);}
     }
     const hCls=totalH>80?'over':totalH>=72?'ok':'under';
     return `<tr><td class="col-name">${s.name}</td>${cells.join('')}<td class="col-hours ${hCls}">${totalH}h</td></tr>`;
@@ -2631,7 +2708,7 @@ function renderSettings(){
       <thead><tr><th>班別</th><th>開始</th><th>結束</th><th>計薪時數</th><th>操作</th></tr></thead>
       <tbody>${STATE.shifts.map(sh=>`<tr>
         <td>${sh.name}</td><td>${sh.start}</td><td>${sh.end}</td>
-        <td>${sh.hours}h <span style="font-size:10px;color:var(--text2)">（在店${timeDiff(sh.start,sh.end)}h）</span></td>
+        <td><span style="font-size:11px;color:var(--text2)">依店家APOC設定</span></td>
         <td>
           <button class="btn btn-outline btn-sm" onclick="openEditShiftModal('${sh.id}')">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteShift('${sh.id}')">刪除</button>
@@ -3069,7 +3146,7 @@ function openEditShiftModal(id){
   showModal(`<div class="modal"><div class="modal-title">編輯班別：${sh.name}</div>
     <div class="form-grid">
       <div class="form-group"><label>班別名稱</label><input id="m-shname" value="${sh.name}"></div>
-      <div class="form-group"><label>時數</label><input id="m-shhours" type="number" value="${sh.hours}" step="0.5"></div>
+      <!-- 時數由店家APOC設定動態計算，不需手動輸入 -->
       <div class="form-group"><label>開始時間</label><input id="m-shstart" type="time" value="${sh.start}"></div>
       <div class="form-group"><label>結束時間</label><input id="m-shend" type="time" value="${sh.end}"></div>
     </div>
@@ -3078,7 +3155,7 @@ function openEditShiftModal(id){
 }
 function editShift(id){
   const sh=STATE.shifts.find(s=>s.id===id);if(!sh)return;
-  sh.name=document.getElementById('m-shname').value.trim();sh.start=document.getElementById('m-shstart').value;sh.end=document.getElementById('m-shend').value;sh.hours=parseFloat(document.getElementById('m-shhours').value)||8;
+  sh.name=document.getElementById('m-shname').value.trim();sh.start=document.getElementById('m-shstart').value;sh.end=document.getElementById('m-shend').value;
   closeModal();showPage('settings');
 }
 function deleteShift(id){if(!confirm('確認刪除？'))return;STATE.shifts=STATE.shifts.filter(s=>s.id!==id);showPage('settings')}
@@ -3381,15 +3458,10 @@ function getShiftCode(c){
   }
   return '';
 }
-function getCellShiftHours(c){
-  if(!c||c.type!=='work') return '';
-  const sh=STATE.shifts.find(x=>x.id===c.shiftId);
-  return sh?sh.hours:'';
-}
-function getCellMealHours(c){
-  if(!c||c.type!=='work') return '';
-  return 0.5; // 固定用餐0.5h（Excel匯出顯示用，詳細計算在 getMealHours）
-}
+// Excel 匯出用：已由 getCellWorkH / getCellMealH 取代
+// 保留空函數避免其他地方殘留呼叫報錯
+function getCellShiftHours(c){ return ''; }
+function getCellMealHours(c){ return ''; }
 
 // ── SheetJS 格式化班表匯出 ──
 async function exportExcelFormatted(y,m,gid){
@@ -3486,7 +3558,7 @@ async function exportExcelFormatted(y,m,gid){
       if(!periodH[pidx])periodH[pidx]=0;
       if(c&&c.type==='work'){
         const sh=STATE.shifts.find(x=>x.id===c.shiftId);
-        const h=sh?sh.hours:8;
+        const stxe=STATE.stores.find(q=>q.id===c?.storeId);const dwxe=getDOW(y,m,d);const h=getCellWorkH(c,stxe,dwxe);
         totalWork+=h; periodH[pidx]+=h;
         totalMeal+=0.5;
       }
@@ -3578,7 +3650,10 @@ async function exportExcelFormatted(y,m,gid){
     setCell(3,R,cell('服勤時間',C.rowSub,font(true,7.5),'center'));
     let rowWorkTotal=0;
     for(let d=1;d<=days;d++){
-      const c=sd[d];const h=getCellShiftHours(c);
+      const c=sd[d];
+      const exStore=STATE.stores.find(x=>x.id===c?.storeId);
+      const exDow=getDOW(y,m,d);
+      const h=getCellWorkH(c,exStore,exDow);
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
       const bdr=isNewP?thickLeft():border();
@@ -3597,7 +3672,10 @@ async function exportExcelFormatted(y,m,gid){
     setCell(3,R,cell('用餐',C.rowSub,font(true,7.5),'center'));
     let mealTotal=0;
     for(let d=1;d<=days;d++){
-      const c=sd[d];const h=getCellMealHours(c);
+      const c=sd[d];
+      const exStore=STATE.stores.find(x=>x.id===c?.storeId);
+      const exDow=getDOW(y,m,d);
+      const h=getCellMealH(c,exStore,exDow);
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
       const bdr=isNewP?thickLeft():border();
