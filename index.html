@@ -869,70 +869,116 @@ function autoScheduleGroup(y,m,gid){
     }
   });
 
-  // ⑥ 排公休：先計算每人整個月的目標公休天數，再均勻分配
-  // 目標：每雙週4天公休（14天 - 10工作天）
-  // 特休/會議/訓練已佔用的天不計入「工作天」，公休仍需補足
+  // ⑥ 排公休：以店家視角控管，確保每天至少 minDaily 人出勤
+  // 規則：
+  //   - 每人每雙週固定 4 天公休（14天減10工作天，跨月等比）
+  //   - 特休/會議/訓練已佔用的天同樣算休息，公休天數相應減少
+  //   - 同店同一天最多只能有「人數 - minDaily」個人同時休
+  //   - 不能連上 6 天
+  //   - 巴斯等 staffAlloc<1 的店無此限制（只有1人）
+
+  // 先建立每個店家每天的「最多可同時休息人數」
+  // maxSimultOff[storeId][day] = 最多幾人可在這天休息
+  const maxSimultOff={};
+  storeList.forEach(store=>{
+    maxSimultOff[store.id]={};
+    const assignedToStore=staffList.filter(s=>getAssignedStores(s.id).includes(store.id));
+    const totalAssigned=assignedToStore.length||1;
+    const minWork=store.minDaily||1;
+    const maxOff=Math.max(0, totalAssigned-minWork);
+    for(let d=1;d<=days;d++){
+      const dow=getDOW(y,m,d);
+      const closedDays=store.closedDOW||[];
+      // 店公休日 → 所有人都可以休
+      maxSimultOff[store.id][d]=closedDays.includes(dow)?totalAssigned:maxOff;
+    }
+  });
+
+  // 計算每天每個員工「被哪些店限制不能休息」
+  // 如果員工今天休息，會導致某店低於 minDaily，就不能讓他休
+  function canTakeOff(sid, d){
+    // 當天已有特休/開會/訓練的不用再算
+    const c=ms[sid]?.[d];
+    if(c&&c.type!=='work'&&c.type!==undefined) return true; // 已有安排
+    if(c?.locked) return false; // 鎖定工作格
+    // 檢查此員工指派的每間店
+    const assignedStores=getAssignedStores(sid);
+    if(assignedStores.length===0) return true; // 未指派特定店，可休
+    for(const storeId of assignedStores){
+      const store=STATE.stores.find(x=>x.id===storeId);
+      if(!store) continue;
+      const dow=getDOW(y,m,d);
+      const closedDays=store.closedDOW||[];
+      if(closedDays.includes(dow)) continue; // 店今天公休，無所謂
+      // 計算這間店今天還有幾人已確定上班（有鎖定的工作格或已排班）
+      const assignedToStore=staffList.filter(s=>getAssignedStores(s.id).includes(storeId));
+      // 已確定今天不會上班的人（已排特休/公休）
+      const definiteOff=assignedToStore.filter(s=>{
+        const sc=ms[s.id]?.[d];
+        return sc&&sc.type!=='work'&&sc.type!==undefined;
+      }).length;
+      // 如果我也休息，今天此店上班人數 = 總指派 - 已確定休 - 1(我)
+      const wouldWork=assignedToStore.length-definiteOff-1;
+      if(wouldWork<(store.minDaily||1)) return false; // 會低於最少人數，不可休
+    }
+    return true;
+  }
+
   staffList.forEach(s=>{
     periods.forEach(p=>{
-      const periodDays=p.days; // 本月內的日期陣列
-
-      // 計算此週期目標公休天數
-      // 完整雙週（14天）= 4天公休；跨月週期等比例
+      const periodDays=p.days;
+      // 此週期目標公休天數
       const offTarget=Math.max(1, Math.round((periodDays.length/14)*4));
-
-      // 計算此週期已有的「非上班」天（特休/開會/訓練 = 視為休息，不需再加公休）
+      // 已有特休/開會等，算進休息
       const specialCount=periodDays.filter(d=>{
         const c=ms[s.id]?.[d];
         return c&&(c.type==='leave'||c.type==='meeting'||c.type==='training');
       }).length;
-
-      // 扣掉特休等，實際需要補的公休天數
       const needOff=Math.max(0, offTarget-specialCount);
       if(needOff===0) return;
 
-      // 可放公休的天（目前空的格子）
-      const available=periodDays.filter(d=>!ms[s.id]?.[d]);
+      // 可以排公休的天：空的、且不違反店家人數限制
+      const available=periodDays.filter(d=>{
+        if(ms[s.id]?.[d]) return false; // 已有安排
+        return canTakeOff(s.id, d);
+      });
       if(available.length===0) return;
 
-      // 均勻分配公休：在可用天中，以等距方式選出 needOff 天
-      // 同時確保不連上6天（若發現連續5天空格，強制在第6天插休）
+      // 均勻分配公休：以等距方式選出 needOff 天
       let offCount=0;
       const step=Math.max(1, Math.floor(available.length/(needOff+1)));
-      // 第一波：等距插入
       for(let i=step; i<available.length&&offCount<needOff; i+=step){
         ms[s.id][available[i]]={type:'off'};
         offCount++;
       }
-      // 第二波：若還不夠，補在剩餘空格的前面
+      // 若不夠，補在剩餘空格
       for(let i=0; i<available.length&&offCount<needOff; i++){
         if(!ms[s.id]?.[available[i]]){
           ms[s.id][available[i]]={type:'off'};
           offCount++;
         }
       }
+    });
+  });
 
-      // 最後：掃一次，確保沒有連續6天（連上5天就強制插休）
-      let consecutive=0;
-      let lastDay=0;
-      for(let di=0;di<periodDays.length;di++){
-        const d=periodDays[di];
-        const c=ms[s.id]?.[d];
-        const isRest=c&&c.type!=='work';
-        const isEmpty=!c;
-        if(isRest||isEmpty){
-          // 空格後面會被排班填入，先視為工作計算連續
-          if(isEmpty) consecutive++;
-          else consecutive=0; // 已有休息，重置
-        } else {
-          consecutive++;
-        }
-        if(consecutive>=6&&isEmpty){
-          // 連上6天了，強制把這天變公休
-          ms[s.id][d]={type:'off'};
-          consecutive=0;
+  // 連上6天補救：掃一次，確保沒有超過6天連班
+  staffList.forEach(s=>{
+    let consecutive=0;
+    for(let d=1;d<=days;d++){
+      const c=ms[s.id]?.[d];
+      if(c&&c.type!=='work'){
+        consecutive=0;
+      } else if(!c){
+        consecutive++;
+        if(consecutive>=6){
+          // 強制休，但要檢查是否違反店家限制
+          if(canTakeOff(s.id,d)){
+            ms[s.id][d]={type:'off'};
+            consecutive=0;
+          }
         }
       }
-    });
+    }
   });
 
   // 每店累積派遣天數（平均分配用）
@@ -990,39 +1036,49 @@ function autoScheduleGroup(y,m,gid){
       const closeHour=parseInt(closeTimeStr.split(':')[0]);
       const isLateStore=closeHour>=21;
 
+      // 計算今天此店「確定會出勤」的總人數（alreadyHere + toAssign）
+      const totalOut=alreadyHere.length+toAssign.length;
+      // 判斷此店有無設定 P 班開始時間
+      const hasPShift=!!getShiftStartTime(store.storeNo,'P',dow);
+
       toAssign.forEach((s,idx)=>{
         let shiftCode;
-
-        // ── 班別選擇邏輯 ──
-        // 判斷此店有無設定 P 班開始時間
-        const hasPShift=!!getShiftStartTime(store.storeNo,'P',dow);
 
         if(!isLateStore){
           // 早關店 → A 班
           shiftCode='A';
+        } else if(totalOut===1&&store.staffAlloc>1){
+          // 多人店只剩1人出勤 → O 班
+          shiftCode='O';
+        } else if(!hasPShift){
+          // 沒設定P班時間 → 預設 A（單人晚關店也走這）
+          // 巴斯例外：staffAlloc<1 且有P設定 → P/A交替
+          shiftCode='A';
+        } else if(store.staffAlloc<1){
+          // 巴斯類（staffAlloc<1，有P設定）→ 預設 P，和前日交替
+          const prev=getPrevShift(s.id,d,ms);
+          shiftCode=(prev==='P')?'A':'P';
         } else {
-          const totalOut=alreadyHere.length+toAssign.length;
-          if(totalOut===1&&store.staffAlloc>1){
-            // 多人店只剩1人出勤 → O 班（規則5）
-            shiftCode='O';
-          } else if(!hasPShift||store.staffAlloc<=1){
-            // 單人店 or 沒有設定P班時間 → A/P 由前日交替決定
-            // 有設定P開始時間 → 可排P；否則一律A
-            if(hasPShift){
-              const prev=getPrevShift(s.id,d,ms);
-              shiftCode=(prev==='P')?'A':'P';
-            } else {
-              shiftCode='A';
-            }
+          // 多人晚關店（有P班設定）
+          // ★ 修正：先看當天同店已有哪些班別，互補
+          const todayShifts=[
+            ...alreadyHere.map(x=>STATE.shifts.find(sh=>sh.id===ms[x.id]?.[d]?.shiftId)?.code),
+            ...toAssign.slice(0,idx).map(x=>STATE.shifts.find(sh=>sh.id===ms[x.id]?.[d]?.shiftId)?.code)
+          ].filter(Boolean);
+          const hasA=todayShifts.includes('A');
+          const hasP=todayShifts.includes('P');
+          if(hasA&&!hasP){
+            shiftCode='P'; // 今天已有A，補P
+          } else if(hasP&&!hasA){
+            shiftCode='A'; // 今天已有P，補A
+          } else if(!hasA&&!hasP){
+            // 今天還沒人，看前日決定
+            const prev=getPrevShift(s.id,d,ms);
+            shiftCode=(prev==='P')?'A':'P';
           } else {
-            // 多人晚關店（有P班設定）→ 第1人看前日交替，第2人反向
-            if(idx===0){
-              const prev=getPrevShift(s.id,d,ms);
-              shiftCode=(prev==='P')?'A':'P';
-            } else {
-              const firstCode=STATE.shifts.find(x=>x.id===ms[toAssign[0].id]?.[d]?.shiftId)?.code;
-              shiftCode=(firstCode==='A')?'P':'A';
-            }
+            // A和P都有了，再多的人看前日
+            const prev=getPrevShift(s.id,d,ms);
+            shiftCode=(prev==='P')?'A':'P';
           }
         }
 
@@ -1937,7 +1993,7 @@ function renderStaffView(){
     if(x.c?.type==='work'){const stxa=STATE.stores.find(q=>q.id===x.c.storeId);const dwxa=getDOW(y,m,x.d);const ha=getCellWorkH(x.c,stxa,dwxa);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${ha}</td>`;}
     return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">–</td>`;
   }).join('');
-  const mealRow=dCells.map(x=>`<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${x.c?.type==='work'?'0.5':''}</td>`).join('');
+  const mealRow=dCells.map(x=>{const mSt=STATE.stores.find(q=>q.id===x.c?.storeId);const mH=getCellMealH(x.c,mSt,x.dow);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${mH||''}</td>`;}).join('');
   const storeRow=dCells.map(x=>`<td style="${x.bl}text-align:center;font-size:10px;background:#FFF;padding:2px;white-space:nowrap">${x.stName||''}</td>`).join('');
   const timeRow=dCells.map(x=>`<td style="${x.bl}text-align:center;font-size:10px;color:var(--text2);background:#FFF;padding:2px;white-space:nowrap">${x.startTime}</td>`).join('');
 
