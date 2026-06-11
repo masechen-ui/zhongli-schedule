@@ -171,7 +171,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   // ── Firebase 設定 ──────────────────────────────
   // 請填入你的 Firebase 專案設定值
   // 取得方式：Firebase Console → 專案設定 → 您的應用程式
-  const firebaseConfig = {
+  const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAouhpSMvx_5hLgcyKMIXby3xnrSlLwXAY",
   authDomain: "schedule-af163.firebaseapp.com",
   projectId: "schedule-af163",
@@ -253,42 +253,48 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
       }
     };
 
-    // ── 即時監聽：其他人儲存後自動提示刷新 ───────
+    // ── 即時監聽：其他人儲存後自動載入最新資料 ──
     window._cloudUnsub = null;
+    window._lastSavedAt = '';
     window.startCloudSync = function(){
       if(window._cloudUnsub) window._cloudUnsub();
       const key = getMonthKey(STATE.currentYear, STATE.currentMonth);
-      window._cloudUnsub = onSnapshot(doc(db, 'schedules', key), (snap)=>{
+      window._cloudUnsub = onSnapshot(doc(db, 'schedules', key), async (snap)=>{
         if(!snap.exists()) return;
         const data = snap.data();
         const remoteBy  = data.savedBy  || '';
         const remoteSAt = data.savedAt  || '';
         const myEmpNo   = STATE.login?.empNo || '';
-        // 不是自己儲存的才提示
-        if(remoteBy && remoteBy !== myEmpNo){
+        // 不是自己的儲存，且時間戳不同 → 自動靜默載入最新
+        if(remoteBy && remoteBy !== myEmpNo && remoteSAt !== window._lastSavedAt){
+          window._lastSavedAt = remoteSAt;
+          await window.loadFromCloud();
           const t = remoteSAt ? new Date(remoteSAt).toLocaleTimeString('zh-TW') : '';
-          if(window.showToast) showToast(`☁️ ${remoteBy} 已更新班表（${t}），點此重新載入`, 6000);
+          if(window.showToast) showToast(`☁️ ${remoteBy} 已更新（${t}），已自動同步`);
+          if(window.showPage) showPage(window.STATE?.currentPage || 'dashboard');
         }
       });
     };
 
-    // ── 掛載到全域，讓舊版 saveToStorage 也同步 ──
-    // 攔截原有的 autoSave，在本機儲存後也推一份到雲端
+    // ── 攔截 autoSave：操作後 2 秒自動同步至雲端 ──
     const _origAutoSave = window.autoSave;
     let _cloudSaveTimer = null;
     window.autoSave = function(){
-      if(_origAutoSave) _origAutoSave();
-      // 雲端同步節流：2 秒後才推（避免連續操作狂打 API）
+      if(_origAutoSave) _origAutoSave(); // 仍保留 localStorage 備份
+      // 雲端同步節流：2 秒後推送
       if(_cloudSaveTimer) clearTimeout(_cloudSaveTimer);
       _cloudSaveTimer = setTimeout(()=> window.saveToCloud(false), 2000);
     };
 
-    // ── 啟動時載入雲端資料 ────────────────────────
+    // ── 啟動：Firebase 優先，失敗才用 localStorage ──
     window.addEventListener('schedule-ready', async ()=>{
       const cloudOk = await window.loadFromCloud();
       if(cloudOk){
         if(window.showToast) showToast('☁️ 已從雲端載入最新班表');
         if(window.showPage)  showPage(window.STATE?.currentPage || 'dashboard');
+      } else {
+        // Firebase 載入失敗 → 提示使用者（localStorage 已在 _init 載入）
+        if(window.showToast) showToast('⚠️ 雲端連線失敗，使用本機資料（離線模式）','warn');
       }
       window.startCloudSync();
     });
@@ -1263,7 +1269,7 @@ function buildSchedTable(staffList,y,m,editable=true){
       let h=0;
       p.days.forEach(d=>{
         const c=sd[d];
-        if(c&&c.type==='work'&&c.shiftId){const stx=STATE.stores.find(q=>q.id===c.storeId);const dwx=getDOW(y,m,parseInt(day));h+=getCellWorkH(c,stx,dwx);}
+        if(c&&c.type==='work'&&c.shiftId){const stx=STATE.stores.find(q=>q.id===c.storeId);const dwx=getDOW(y,m,d);h+=getCellWorkH(c,stx,dwx);}
       });
       pHours[p.idx]=h;
     });
@@ -1899,7 +1905,7 @@ function renderStaffView(){
     if(c.type==='work'){
       const sh=STATE.shifts.find(x=>x.id===c.shiftId);
       const stxs=STATE.stores.find(q=>q.id===c?.storeId);const dwxs=getDOW(y,m,d);const h=getCellWorkH(c,stxs,dwxs);
-      workDays++;workH+=h;mealH+=0.5;
+      workDays++;workH+=h;const mealHx=getCellMealH(c,stxs,dwxs);mealH+=mealHx;
       const pidx=getBiweeklyIdxForDay(y,m,d,periods);
       pHours[pidx]=(pHours[pidx]||0)+h;
     } else if(c.type==='off'){offDays++;}
@@ -1928,7 +1934,7 @@ function renderStaffView(){
   const dateRow=dCells.map(x=>`<th style="min-width:28px;font-size:10px;background:${x.bg};${x.bl}">${x.d}<br><span style="font-size:9px">${DAY_NAMES[x.dow]}</span></th>`).join('');
   const shiftRow=dCells.map(x=>`<td class="${x.shiftCls}" onclick="openCellEdit('${s.id}',${x.d},${y},${m},'staff-view')" title="點擊修改班別" style="${x.bl}cursor:pointer;text-align:center;font-size:11px;font-weight:700;padding:2px">${x.code}</td>`).join('');
   const workRow=dCells.map(x=>{
-    if(x.c?.type==='work'){const stxa=STATE.stores.find(q=>q.id===x.c.storeId);const dwxa=getDOW(y,m,d);const ha=getCellWorkH(x.c,stxa,dwxa);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${ha}</td>`;}
+    if(x.c?.type==='work'){const stxa=STATE.stores.find(q=>q.id===x.c.storeId);const dwxa=getDOW(y,m,x.d);const ha=getCellWorkH(x.c,stxa,dwxa);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${ha}</td>`;}
     return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">–</td>`;
   }).join('');
   const mealRow=dCells.map(x=>`<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${x.c?.type==='work'?'0.5':''}</td>`).join('');
@@ -2755,16 +2761,14 @@ function renderSettings(){
     <div class="card-title">資料管理</div>
     <div id="storage-info" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-success" onclick="saveToStorage();showToast('已手動儲存');updateSaveStatus()">💾 立即儲存</button>
-      <button class="btn btn-info" onclick="saveToCloud(true)" title="推送至 Firestore 雲端">☁️ 同步至雲端</button>
-      <button class="btn btn-outline" onclick="loadFromCloud().then(ok=>{if(ok){showPage('dashboard');showToast('☁️ 已從雲端載入');}else{showToast('⚠️ 雲端無資料或載入失敗');}})">☁️ 從雲端載入</button>
+      <button class="btn btn-info" onclick="loadFromCloud().then(ok=>{if(ok){showPage('dashboard');showToast('☁️ 已從雲端載入最新資料');}else{showToast('⚠️ 雲端無資料或連線失敗','warn');}})">☁️ 重新從雲端載入</button>
       <button class="btn btn-outline" onclick="exportJSON()">⬇ 匯出備份 JSON</button>
       <button class="btn btn-outline" onclick="importJSON()">⬆ 匯入備份 JSON</button>
       <button class="btn btn-outline" onclick="clearAllSchedules()">🗑 清除所有班表</button>
       <button class="btn btn-danger" onclick="clearStorage()">⚠ 清除全部資料（重設）</button>
     </div>
     <div class="alert alert-info" style="margin-top:12px;font-size:12px">
-      💡 資料自動儲存於瀏覽器本機（localStorage）。建議每月定期「匯出備份 JSON」存到電腦，避免清除瀏覽器資料時遺失。
+      ☁️ 資料即時同步至 Firebase 雲端，所有使用者共用同一份資料。建議每月定期「匯出備份 JSON」存到電腦作為備份。
     </div>
   </div>`;
   // 顯示儲存空間資訊
@@ -2858,7 +2862,7 @@ function storeFormHTML(s){
   const existTimes=v('shiftTimes', STATE.storeShiftTimes?.[storeNo]||{});
   const SHIFTS_APOC=['A','P','O','C'];
   const SHIFT_LABELS={A:'A 早班',P:'P 晚班',O:'O 全天',C:'C 特殊班'};
-  const DOW_KEYS=['mon','tue','wed','thu','fri','sat','sun'];
+  const DOW_KEYS=['sun','mon','tue','wed','thu','fri','sat'];
 
   // 建立 APOC × 星期 的時間輸入表格
   const shiftTimeTable=`
@@ -3804,14 +3808,14 @@ function saveToStorage(){
   }
 }
 
-// 預設班別（當 localStorage 沒有班別資料時補回）
+// 預設班別（當 localStorage/Firebase 沒有班別資料時補回）
 function getDefaultShifts(){
   return [
-    {id:'s1',name:'A班',code:'A',start:'09:30',end:'18:00',hours:8},
-    {id:'s3',name:'P班',code:'P',start:'13:00',end:'21:30',hours:8},
-    {id:'s4',name:'O班',code:'O',start:'09:30',end:'21:30',hours:11},
-    {id:'s5',name:'C班',code:'C',start:'',end:'',hours:4,note:'特殊班：打烊前回去，無開店'},
-    {id:'s6',name:'B班',code:'B',start:'',end:'',hours:8,note:'上課後回去上班'},
+    {id:'s1',name:'A班',code:'A'},
+    {id:'s3',name:'P班',code:'P'},
+    {id:'s4',name:'O班',code:'O'},
+    {id:'s5',name:'C班',code:'C',note:'特殊班：打烊前回去，無開店'},
+    {id:'s6',name:'B班',code:'B',note:'上課後回去上班'},
   ];
 }
 
@@ -3849,9 +3853,10 @@ function loadFromStorage(){
 }
 
 function clearStorage(){
-  if(!confirm('確定要清除所有本機儲存的資料？\n這會刪除所有班表、人員、店家設定，並重設為系統預設值。'))return;
+  if(!confirm('確定要清除全部資料？\n這會清除本機和雲端所有班表、人員、店家設定，並重設為系統預設值。\n此操作無法復原！'))return;
   localStorage.removeItem(LS_KEY);
   initData();
+  saveToCloud(true); // 把空白狀態推上雲端
   showPage('dashboard');
   showToast('已清除所有資料，已還原為預設值');
 }
@@ -3870,7 +3875,7 @@ function updateSaveStatus(){
   const el=document.getElementById('save-status');
   if(!el) return;
   const now=new Date();
-  el.textContent=`💾 ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')} 已儲存`;
+  el.textContent=`☁️ ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')} 已同步`;
   el.style.color='rgba(255,255,255,0.6)';
 }
 
@@ -3888,7 +3893,7 @@ function showToast(msg, type='success'){
 }
 
 function exportJSON(){
-  saveToStorage(); // 確保最新資料已存
+  // 匯出目前 STATE 為 JSON 備份
   const data={
     staff:STATE.staff,stores:STATE.stores,schedules:STATE.schedules,
     specialEvents:STATE.specialEvents,staffAssignments:STATE.staffAssignments,
@@ -3995,27 +4000,16 @@ function guestMode(){
 
 // ==================== 初始化 ====================
 function _init(){
-  // 嘗試從 localStorage 還原資料
+  // 先嘗試 localStorage（作為畫面快速顯示用）
   const restored = loadFromStorage();
   if(!restored){
-    // 第一次使用：載入預設資料
-    initData();
-    showToast('✨ 歡迎使用中壢課排班系統！資料將自動儲存於本機。');
-  } else {
-    // 還原成功
-    const raw = localStorage.getItem(LS_KEY);
-    try{
-      const meta = JSON.parse(raw);
-      const savedAt = meta.savedAt ? new Date(meta.savedAt).toLocaleString('zh-TW') : '未知';
-      showToast(`📂 已還原上次資料（${savedAt}）`);
-    }catch(e){}
+    initData(); // 第一次使用
   }
-  // 設定為已登入（移除登入驗證）
-  STATE.login = {loggedIn:true, empNo:'', role:'admin', name:'中壢課'};
+  // 設定為已登入
+  STATE.login = {loggedIn:true, empNo:'03250', role:'admin', name:'中壢課'};
   showPage('dashboard');
   updateSaveStatus();
-
-  // 通知 Firebase 模組初始化完成，可以開始雲端同步
+  // 通知 Firebase 模組啟動，Firebase 載入成功後會覆蓋畫面
   window.dispatchEvent(new Event('schedule-ready'));
 }
 if(document.readyState==='loading'){
