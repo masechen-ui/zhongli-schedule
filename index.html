@@ -869,40 +869,47 @@ function autoScheduleGroup(y,m,gid){
     }
   });
 
-  // ── [修正A] 預算每人每月可排班天數（按各店 staffAlloc 比例預分配）──
-  // 當一個人指派多間店時，不能讓某間店搶光她的天數
-  // 計算方式：各店月需求天數 = (月工作天) × staffAlloc
-  // 若某人指派多店，依比例分配她的可用天數給各店
-  const monthWorkDays = (() => {
-    let cnt = 0;
-    for(let d=1;d<=days;d++){
-      // 計算所有店共同的非公休天（以第一間店為基準，或直接算所有天）
-      cnt++;
-    }
-    return cnt; // 用全月天數，各店自己過濾公休日
-  })();
+  // ── [修正F·v8] 預算每人每月可排班天數（按各店 staffAlloc 比例預分配）──
+  // v7 bug：用「全月30天」當基底，導致睡衣預算23天 > 實際可上班天數(~21天)，
+  // 預算永遠用不完，巴斯一天都搶不到。
+  // v8：基底改用「可工作天數」= 全月天數 - 全月公休目標天數（雙週4天等比）
+  const monthOffTarget = Math.round(days/14*4);            // 30天月 ≈ 9天公休
+  const monthWorkDays  = days - monthOffTarget;            // 30天月 ≈ 21天可工作
 
   // 每人每店「月排班天數上限」
   // staffMonthBudget[staffId][storeId] = 最多排幾天
+  // v8：比例基底改用「個人分擔份額」= 店staffAlloc ÷ 該店指派人數
+  // （睡衣1.5有2人指派 → 麥菁云在睡衣的份額是0.75；巴斯0.5只有她1人 → 份額0.5
+  //   → 麥菁云預算比例 = 0.6 : 0.4，巴斯約可分到8天，而非v7的搶不到）
   const staffMonthBudget={};
+  const storeAssignCount={};
+  storeList.forEach(st=>{
+    storeAssignCount[st.id]=staffList.filter(s=>getAssignedStores(s.id).includes(st.id)).length||1;
+  });
   staffList.forEach(s=>{
     staffMonthBudget[s.id]={};
     const assignedStoreIds=getAssignedStores(s.id);
     if(assignedStoreIds.length===0) return;
-    // 各店的 staffAlloc 加總
-    const totalAlloc=assignedStoreIds.reduce((sum,sid)=>{
+    // 各店「個人份額」：店staffAlloc 先扣掉「只指派這一間店」同事的全職貢獻(各1.0)，
+    // 剩餘份額由多店人員均分。
+    // 例：睡衣1.5 = 陳淑蓮(單店,1.0) + 麥菁云分擔0.5；巴斯0.5只有麥 → 0.5
+    //     → 麥菁云比例 0.5:0.5，巴斯約可分到10天（v7搶不到、份額版只有8天）
+    const shares=assignedStoreIds.map(sid=>{
       const st=storeList.find(x=>x.id===sid);
-      return sum+(st?st.staffAlloc:0);
-    },0);
-    if(totalAlloc<=0) return;
-    assignedStoreIds.forEach(sid=>{
-      const st=storeList.find(x=>x.id===sid);
-      if(!st) return;
-      // 按比例分配月天數，最少不低於 staffAlloc×月工作天/14*10
-      const ratio=st.staffAlloc/totalAlloc;
-      // 此人在此店的月目標天數（取整）
-      const targetDays=Math.round(monthWorkDays*ratio*(totalAlloc>1?1:1));
-      staffMonthBudget[s.id][sid]=targetDays;
+      if(!st) return {sid, share:0};
+      const others=staffList.filter(o=>o.id!==s.id&&getAssignedStores(o.id).includes(sid));
+      const singleStoreOthers=others.filter(o=>getAssignedStores(o.id).length===1).length;
+      const multiStoreOthers=others.length-singleStoreOthers;
+      const residual=Math.max(0.25, st.staffAlloc-singleStoreOthers);
+      return {sid, share: residual/(multiStoreOthers+1)};
+    });
+    const totalShare=shares.reduce((sum,x)=>sum+x.share,0);
+    if(totalShare<=0) return;
+    shares.forEach(({sid,share})=>{
+      if(share<=0) return;
+      const ratio=share/totalShare;
+      // 此人在此店的月目標天數（以可工作天為基底，至少1天）
+      staffMonthBudget[s.id][sid]=Math.max(1, Math.round(monthWorkDays*ratio));
     });
   });
 
@@ -939,13 +946,48 @@ function autoScheduleGroup(y,m,gid){
     return true;
   }
 
-  // ── [修正C] 公休分配：雙週內均勻分布，確保不連上6天 ──
-  // 目標：雙週4天公休，均勻分散（不前堆不後堆）
+  // ── [修正I·v8] 估算每人平均班別時數（依指派店的 APOC 動態時數）──
+  // 單人店（正大/融辰）只有A班 10.5h → 雙週80h只夠上7天 → 公休應為7天/雙週
+  // v7 公休預分配固定只放4天，多出的公休被80h上限擠到雙週尾端（連三休）
+  function estimateAvgShiftH(s){
+    const stIds=getAssignedStores(s.id);
+    const sts=stIds.map(sid=>STATE.stores.find(x=>x.id===sid)).filter(Boolean);
+    if(sts.length===0) return 8;
+    let sum=0,n=0;
+    sts.forEach(st=>{
+      const dow=3; // 以週三為代表日
+      const aH=calcShiftHours(st,'A',dow).workH||0;
+      const oStart=getShiftStartTime(st.storeNo,'O',dow);
+      const pStart=getShiftStartTime(st.storeNo,'P',dow);
+      if((st.staffAlloc||1)<2&&oStart){
+        // 單人覆蓋型店（睡衣等）：多數日子排O班顧全天 → 用O班時數估
+        sum+=calcShiftHours(st,'O',dow).workH||aH;
+      } else if(pStart){
+        const pH=calcShiftHours(st,'P',dow).workH||0;
+        sum+=(aH+pH)/2; // 有P班的多人店：A/P各半
+      } else {
+        sum+=aH; // 只有A班的店（正大/融辰）
+      }
+      n++;
+    });
+    return n?Math.max(4, sum/n):8;
+  }
+
+  // ── [修正C+I·v8] 公休分配：雙週內均勻分布 ──
+  // 公休目標 = max(政策4天等比, 雙週天數 - 80h上限可上的天數)
   staffList.forEach(s=>{
+    const avgH=estimateAvgShiftH(s);
     periods.forEach(p=>{
       const periodDays=p.days;
-      // 雙週目標公休天數（等比計算）
-      const offTarget=Math.max(1, Math.round((periodDays.length/14)*4));
+      const periodMaxHForP=Math.round((periodDays.length/14)*80);
+      // 政策最低公休（雙週4天等比）
+      const policyOff=Math.max(1, Math.round((periodDays.length/14)*4));
+      // 工時上限可上的天數（扣掉已排鎖定工時）
+      const alreadyH=periodWorkedH[s.id]?.[p.idx]||0;
+      const maxWorkDays=Math.max(0, Math.floor((periodMaxHForP-alreadyH)/avgH));
+      const alreadyWorkDays=periodDays.filter(d=>ms[s.id]?.[d]?.type==='work').length;
+      const hourOff=periodDays.length-alreadyWorkDays-maxWorkDays;
+      const offTarget=Math.max(policyOff, hourOff);
       const specialCount=periodDays.filter(d=>{
         const c=ms[s.id]?.[d];
         return c&&(c.type==='leave'||c.type==='meeting'||c.type==='training');
@@ -1008,6 +1050,16 @@ function autoScheduleGroup(y,m,gid){
   const storeAssigned={};
   storeList.forEach(st=>{storeAssigned[st.id]={}});
 
+  // ── [修正G·v8] 店家月時數控管 ──
+  // 派員1.5 的店，dailyMax=2 等於每天都派2人 → 實際變成派員2.0（睡衣 127% 超標）
+  // v8：追蹤每店累積服勤時數，依「月時數上限 × 進度」配速，超過配額當天就不再補人
+  const storeHoursUsed={};
+  const storeHoursCap={};
+  storeList.forEach(st=>{
+    storeHoursUsed[st.id]=0;
+    storeHoursCap[st.id]=storeHoursLimit(st.staffAlloc, days); // (月天數-8)×8h×派員
+  });
+
   // ⑦ 排每天班別
   for(let d=1;d<=days;d++){
     const dow=getDOW(y,m,d);
@@ -1042,13 +1094,16 @@ function autoScheduleGroup(y,m,gid){
       const need=dailyMax-alreadyHere.length;
       if(need<=0)return;
 
-      // ── [修正A] 候選池：優先固定指派，並考慮月預算 ──
+      // ── [修正F·v8] 候選池：優先固定指派，月預算「按進度配速」──
+      // v7 只檢查 used>=budget，但 storeList 順序在前的店（睡衣）每天先搶人，
+      // 預算用完前後面的店（巴斯）永遠輪不到。
+      // v8：每天只允許用到「預算 × 月進度」，強制多店交錯排班。
       function canAssignToStore(s, storeId){
-        // 月預算檢查：若此人對此店有預算限制，且已超過，跳過
         const budget=staffMonthBudget[s.id]?.[storeId];
         if(budget!=null){
           const used=staffStoreDays[s.id]?.[storeId]||0;
-          if(used>=budget) return false;
+          const allowedByPace=Math.ceil(budget*d/days); // 按月進度配速
+          if(used>=Math.min(budget, allowedByPace)) return false;
         }
         return true;
       }
@@ -1067,7 +1122,11 @@ function autoScheduleGroup(y,m,gid){
       });
 
       const pool=[...fixedPool,...otherPool];
-      pool.sort((a,b)=>(storeAssigned[store.id][a.id]||0)-(storeAssigned[store.id][b.id]||0));
+      // 排序：先比此店派遣次數（店內公平），再比雙週已排工時（讓落後的人優先上班）
+      pool.sort((a,b)=>
+        ((storeAssigned[store.id][a.id]||0)-(storeAssigned[store.id][b.id]||0))||
+        ((periodWorkedH[a.id]?.[pidx]||0)-(periodWorkedH[b.id]?.[pidx]||0))
+      );
       const toAssign=pool.slice(0,need);
 
       const closeTimeStr=weekend?(store.closeWeekend||store.close):store.close;
@@ -1075,10 +1134,29 @@ function autoScheduleGroup(y,m,gid){
       const isLateStore=closeHour>=21;
       const hasPShift=!!getShiftStartTime(store.storeNo,'P',dow);
 
+      // ── [修正G·v8] 店時數配速：累計今天已在店的時數（鎖定格等） ──
+      alreadyHere.forEach(s=>{
+        storeHoursUsed[store.id]+=getCellWorkH(ms[s.id][d],store,dow);
+      });
+      // 本店今日時數配額 = 月上限 × 進度（已過天數/全月天數）
+      const storeQuotaToday=storeHoursCap[store.id]*d/days;
+
       // 計算今天此店確定出勤總人數
       const totalOut=alreadyHere.length+toAssign.length;
 
-      toAssign.forEach((s,idx)=>{
+      // 雙週工時上限（供超標防護用）
+      const periodObj=periods.find(p=>p.idx===pidx);
+      const periodLen=periodObj?periodObj.days.length:14;
+      const periodMaxH=Math.round(periodLen/14*80);
+      const posInPeriod=periodObj?(periodObj.days.indexOf(d)+1):1;
+
+      let assignedCount=0;
+      for(const s of toAssign){
+        // [修正G·v8] 店時數已達本日配額 → 不再「加派」
+        // 但保證每天至少 minDaily 人出勤（不能因配額讓店整天沒人）
+        const outNow=alreadyHere.length+assignedCount;
+        if(outNow>=(store.minDaily||1) && storeHoursUsed[store.id]>=storeQuotaToday) break;
+
         let shiftCode;
 
         if(!isLateStore){
@@ -1094,35 +1172,81 @@ function autoScheduleGroup(y,m,gid){
           shiftCode=(prev==='P')?'A':'P';
         } else {
           // ── [修正E] A/P互補：即時讀 ms 已寫入的班別 ──
-          // alreadyHere 讀 ms（已寫入），toAssign 前面的人已經寫進 ms 了
-          const todayShifts=[
-            ...alreadyHere.map(x=>STATE.shifts.find(sh=>sh.id===ms[x.id]?.[d]?.shiftId)?.code),
-            ...toAssign.slice(0,idx).map(x=>STATE.shifts.find(sh=>sh.id===ms[x.id]?.[d]?.shiftId)?.code)
-          ].filter(Boolean);
+          const todayShifts=staffList
+            .filter(x=>ms[x.id]?.[d]?.type==='work'&&ms[x.id]?.[d]?.storeId===store.id)
+            .map(x=>STATE.shifts.find(sh=>sh.id===ms[x.id]?.[d]?.shiftId)?.code)
+            .filter(Boolean);
           const hasA=todayShifts.includes('A');
           const hasP=todayShifts.includes('P');
           if(hasA&&!hasP) shiftCode='P';
           else if(hasP&&!hasA) shiftCode='A';
           else {
-            const prev=getPrevShift(s.id,d,ms);
-            shiftCode=(prev==='P')?'A':'P';
+            // ── [修正H·v8] 自由選班時改用「雙週工時配速」──
+            // v7 用前一班交替，導致有人連吃太多10h的A班，8天就撞80h上限，
+            // 後段整片變公休（大江公休超過、月工時僅131~147h的主因）。
+            // v8：落後配速 → 排長班(A)；超前配速 → 排短班(P)，
+            //     讓每人雙週平均約 7.5h/天，可上滿 10~11 天。
+            const pace=periodMaxH*posInPeriod/periodLen;
+            shiftCode=((periodWorkedH[s.id]?.[pidx]||0)>=pace)?'P':'A';
           }
         }
 
-        const shiftObj=STATE.shifts.find(x=>x.code===shiftCode)||STATE.shifts[0];
-        const shiftId=shiftObj?.id||'s1';
-        const cell={type:'work',storeId:store.id,shiftId};
-        const actualHours=getCellWorkH(cell,store,dow);
+        let shiftObj=STATE.shifts.find(x=>x.code===shiftCode)||STATE.shifts[0];
+        let cell={type:'work',storeId:store.id,shiftId:shiftObj?.id||'s1'};
+        let actualHours=getCellWorkH(cell,store,dow);
+
+        // ── [修正H·v8] 雙週80h硬上限防護：排下去會超標就改短班，仍超標就跳過 ──
+        const curPeriodH=periodWorkedH[s.id]?.[pidx]||0;
+        if(curPeriodH+actualHours>periodMaxH){
+          if(hasPShift&&shiftCode!=='P'){
+            const pObj=STATE.shifts.find(x=>x.code==='P');
+            if(pObj){
+              const pCell={type:'work',storeId:store.id,shiftId:pObj.id};
+              const pH=getCellWorkH(pCell,store,dow);
+              if(curPeriodH+pH<=periodMaxH){
+                shiftObj=pObj; cell=pCell; actualHours=pH;
+              } else continue; // 連P班都放不下 → 跳過此人（之後變公休）
+            } else continue;
+          } else continue;
+        }
 
         // ── [修正E] 立即寫入 ms，讓後續人員能讀到正確班別 ──
         ms[s.id][d]=cell;
         periodWorkedH[s.id][pidx]=(periodWorkedH[s.id][pidx]||0)+actualHours;
         weekWorked[`${s.id}_${wk}`]=(weekWorked[`${s.id}_${wk}`]||0)+1;
         storeAssigned[store.id][s.id]=(storeAssigned[store.id][s.id]||0)+1;
+        storeHoursUsed[store.id]+=actualHours; // [修正G·v8] 店時數累計
         // 月預算追蹤
         if(!staffStoreDays[s.id][store.id]) staffStoreDays[s.id][store.id]=0;
         staffStoreDays[s.id][store.id]++;
-      });
+        assignedCount++;
+      }
+
+      // ── [修正G·v8] 孤班轉O：配額/80h防護砍掉第二人後，
+      // 多人店今天只剩1人且排的是A或P（半天班）→ 改成O班顧全天
+      if(isLateStore&&store.staffAlloc>1){
+        const workersToday=staffList.filter(s=>ms[s.id]?.[d]?.type==='work'&&ms[s.id]?.[d]?.storeId===store.id);
+        if(workersToday.length===1){
+          const lone=workersToday[0];
+          const c=ms[lone.id][d];
+          const sh=STATE.shifts.find(x=>x.id===c.shiftId);
+          if(sh&&(sh.code==='A'||sh.code==='P')&&!c.locked){
+            const oObj=STATE.shifts.find(x=>x.code==='O');
+            if(oObj){
+              const oldH=getCellWorkH(c,store,dow);
+              const oCell={type:'work',storeId:store.id,shiftId:oObj.id};
+              const oH=getCellWorkH(oCell,store,dow);
+              const curH=periodWorkedH[lone.id]?.[pidx]||0;
+              // 換成O班不會超過雙週上限才換
+              if(curH-oldH+oH<=periodMaxH){
+                ms[lone.id][d]=oCell;
+                periodWorkedH[lone.id][pidx]=curH-oldH+oH;
+                storeHoursUsed[store.id]+=oH-oldH;
+              }
+            }
+          }
+        }
+      }
     });
 
     // 沒有安排的格子 → 公休
