@@ -1121,13 +1121,49 @@ function autoScheduleGroup(y,m,gid){
                canAssignToStore(s,store.id);
       });
 
-      const pool=[...fixedPool,...otherPool];
-      // 排序：先比此店派遣次數（店內公平），再比雙週已排工時（讓落後的人優先上班）
-      pool.sort((a,b)=>
-        ((storeAssigned[store.id][a.id]||0)-(storeAssigned[store.id][b.id]||0))||
-        ((periodWorkedH[a.id]?.[pidx]||0)-(periodWorkedH[b.id]?.[pidx]||0))
-      );
-      const toAssign=pool.slice(0,need);
+      // ── [修正J·v8] 主力/副手模式（從人工班表提取的核心邏輯）──
+      // 睡衣/莎露/平鎮大等 1<staffAlloc<2 的店：
+      //   單店指派人 = 主力，全天O班覆蓋
+      //   多店指派人 = 副手，只在主力公休日才過來代班
+      // 這是人工排班最核心的模式，所有 staffAlloc=1.5 的店都是這樣排的。
+
+      // 識別此店的主力（單店指派）和副手（多店指派）
+      const storePrimary=fixedPool.filter(s=>getAssignedStores(s.id).length===1);
+      const storeSecondary=[
+        ...fixedPool.filter(s=>getAssignedStores(s.id).length>1),
+        ...otherPool
+      ];
+
+      let toAssign;
+      const isPrimaryMode = store.staffAlloc>1 && store.staffAlloc<2
+                          && storePrimary.length>=1 && storeSecondary.length>=0;
+
+      if(isPrimaryMode){
+        // 主力/副手模式：
+        // 有主力可用 → 只排主力1人（O班顧全天），不叫副手
+        // 主力不可用（公休/特休/已排他店） → 排副手1人代班
+        if(storePrimary.length>0){
+          toAssign=storePrimary.slice(0,1);
+        } else {
+          // 按此店派遣次數排序，讓副手間公平分配代班天數
+          storeSecondary.sort((a,b)=>
+            ((storeAssigned[store.id][a.id]||0)-(storeAssigned[store.id][b.id]||0))
+          );
+          toAssign=storeSecondary.slice(0,1);
+        }
+      } else {
+        // 一般模式（staffAlloc>=2 的多人店、staffAlloc<=1 的單人店）
+        const pool=[...fixedPool,...otherPool];
+        // 排序：單店指派優先，再比派遣次數，再比工時落後
+        pool.sort((a,b)=>{
+          const aMulti=getAssignedStores(a.id).length>1?1:0;
+          const bMulti=getAssignedStores(b.id).length>1?1:0;
+          if(aMulti!==bMulti) return aMulti-bMulti;
+          return ((storeAssigned[store.id][a.id]||0)-(storeAssigned[store.id][b.id]||0))||
+                 ((periodWorkedH[a.id]?.[pidx]||0)-(periodWorkedH[b.id]?.[pidx]||0));
+        });
+        toAssign=pool.slice(0,need);
+      }
 
       const closeTimeStr=weekend?(store.closeWeekend||store.close):store.close;
       const closeHour=parseInt((closeTimeStr||'21:00').split(':')[0]);
@@ -1152,15 +1188,34 @@ function autoScheduleGroup(y,m,gid){
 
       let assignedCount=0;
       for(const s of toAssign){
-        // [修正G·v8] 店時數已達本日配額 → 不再「加派」
-        // 但保證每天至少 minDaily 人出勤（不能因配額讓店整天沒人）
-        const outNow=alreadyHere.length+assignedCount;
-        if(outNow>=(store.minDaily||1) && storeHoursUsed[store.id]>=storeQuotaToday) break;
+        // [修正G·v8] 店時數配速：主力模式已限1人/天，不需配速限制
+        if(!isPrimaryMode){
+          const outNow=alreadyHere.length+assignedCount;
+          if(outNow>=(store.minDaily||1) && storeHoursUsed[store.id]>=storeQuotaToday) break;
+        }
 
         let shiftCode;
+        const hasOShift=!!getShiftStartTime(store.storeNo,'O',dow);
 
         if(!isLateStore){
           shiftCode='A';
+        } else if(isPrimaryMode){
+          // ── [修正J·v8] 主力/副手模式的班別邏輯 ──
+          // 人工班表規律：staffAlloc 1~2 的店，不管主力或副手，
+          // 獨自覆蓋時一律 O 班（全天顧店）
+          const othersHere=alreadyHere.length+assignedCount;
+          if(othersHere===0 && hasOShift){
+            shiftCode='O'; // 獨自覆蓋 → O班顧全天
+          } else if(hasPShift){
+            // 罕見：主力+副手同天出勤（人手充足日）→ A/P互補
+            const todayShifts=staffList
+              .filter(x=>ms[x.id]?.[d]?.type==='work'&&ms[x.id]?.[d]?.storeId===store.id)
+              .map(x=>STATE.shifts.find(sh=>sh.id===ms[x.id]?.[d]?.shiftId)?.code)
+              .filter(Boolean);
+            shiftCode=todayShifts.includes('A')?'P':'A';
+          } else {
+            shiftCode='A';
+          }
         } else if(totalOut===1&&store.staffAlloc>1){
           // 多人店今天只有1人出勤 → O班
           shiftCode='O';
