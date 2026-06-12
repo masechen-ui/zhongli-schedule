@@ -1536,7 +1536,7 @@ function buildSchedTable(staffList,y,m,editable=true){
     // 各雙週工時標籤
     const pHoursLabel=periods.map(p=>{
       const h=pHours[p.idx]||0;
-      const maxH=Math.min(80,p.days.length*8);
+      const maxH=Math.round((p.days.length/14)*80);
       const cls=h>maxH?'color:var(--danger);font-weight:700':h>=maxH*0.9?'color:var(--success)':'color:var(--warn)';
       return `<span style="font-size:10px;${cls}" title="${p.label}">${h}h</span>`;
     }).join('<span style="color:var(--border);margin:0 2px">│</span>');
@@ -1596,7 +1596,7 @@ function renderScheduleGroup(gid){
     }
     const labels=periods.map(p=>{
       const h=pHours[p.idx]||0;
-      const maxH=Math.min(80,p.days.length*8);
+      const maxH=Math.round((p.days.length/14)*80);
       const ok=h>=maxH;
       return `<span style="font-size:10px;padding:1px 5px;border-radius:8px;background:${ok?'#EAFAF1':'#FEF9E7'};color:${ok?'#1E8449':'#B7950B'}">${p.idx}: ${h}/${maxH}h${ok?'✅':'⚠️'}</span>`;
     }).join(' ');
@@ -2192,7 +2192,7 @@ function renderStaffView(){
   const stdH=160;
   const pHLabel=periods.map(p=>{
     const h=pHours[p.idx]||0;
-    const maxH=Math.min(80,p.days.length*8);
+    const maxH=Math.round((p.days.length/14)*80);
     const ok=h>=maxH;
     return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:11px;background:${ok?'#EAFAF1':'#FEF9E7'};border:1px solid ${ok?'#82E0AA':'#F9CA74'};color:${ok?'#1E8449':'#B7950B'}">第${p.idx}雙週：${h}/${maxH}h ${ok?'✅':'⚠️'}</span>`;
   }).join(' ');
