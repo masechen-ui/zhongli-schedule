@@ -217,6 +217,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
       };
       try{
         await setDoc(doc(db, 'app', CLOUD_KEY), payload);
+        // 推送成功後記錄時間戳，讓 onSnapshot 知道這是自己推的，不需要重新載入
+        window._lastSavedAt = payload.savedAt;
         if(showMsg && window.showToast) showToast('☁️ 已同步至雲端');
         if(window.updateSaveStatus) updateSaveStatus(true);
         console.log('☁️ 已推送至 Firestore, savedAt:', payload.savedAt);
@@ -273,15 +275,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
         const data = snap.data();
         const remoteBy  = data.savedBy  || '';
         const remoteSAt = data.savedAt  || '';
-        const myEmpNo   = STATE.login?.empNo || '';
-        // 不是自己的儲存，且時間戳不同 → 自動靜默載入最新
-        if(remoteBy !== myEmpNo && remoteSAt !== window._lastSavedAt){
-          window._lastSavedAt = remoteSAt;
-          await window.loadFromCloud();
-          const t = remoteSAt ? new Date(remoteSAt).toLocaleTimeString('zh-TW') : '';
-          if(window.showToast) showToast(`☁️ ${remoteBy} 已更新（${t}），已自動同步`);
-          if(window.showPage) showPage(window.STATE?.currentPage || 'dashboard');
-        }
+        // 時間戳相同 → 是自己剛推送的，忽略
+        if(remoteSAt === window._lastSavedAt) return;
+        window._lastSavedAt = remoteSAt;
+        // 雲端載入鎖定中 → 忽略（避免 loadFromCloud 完成後自己推送再觸發）
+        if(window._cloudLoadingLock) return;
+        await window.loadFromCloud();
+        const t = remoteSAt ? new Date(remoteSAt).toLocaleTimeString('zh-TW') : '';
+        if(window.showToast) showToast(`☁️ ${remoteBy} 已更新（${t}），已自動同步`);
+        if(window.showPage) showPage(window.STATE?.currentPage || 'dashboard');
       });
       console.log('☁️ 即時監聽已啟動 (app/'+CLOUD_KEY+')');
     };
