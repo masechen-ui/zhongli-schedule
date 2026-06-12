@@ -280,28 +280,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
       });
     };
 
-    // ── 啟動：Firebase 優先，失敗才用 localStorage ──
-    // （autoSave 已直接呼叫 window.saveToCloud，不需攔截）
-    window.addEventListener('schedule-ready', async ()=>{
-      const cloudOk = await window.loadFromCloud();
-      if(cloudOk){
-        if(window.showToast) showToast('☁️ 已從雲端載入最新班表');
-        if(window.showPage)  showPage(window.STATE?.currentPage || 'dashboard');
-      } else {
-        // Firestore 無此月份資料 → 本機有資料就自動推送一次，建立雲端副本
-        const hasLocal = localStorage.getItem('schedule_system_v1');
-        if(hasLocal){
-          console.log('☁️ 雲端無資料，自動推送本機資料到 Firestore...');
-          await window.saveToCloud(false);
-          if(window.showToast) showToast('☁️ 已將本機資料推送至雲端');
-        } else {
-          if(window.showToast) showToast('ℹ️ 雲端與本機均無資料，使用初始資料','warn');
-        }
-      }
-      window.startCloudSync();
-    });
-
     console.log('✅ Firebase 已初始化，專案：', FIREBASE_CONFIG.projectId);
+    // _init() 會輪詢等待 window.saveToCloud 出現後自動執行雲端同步
   } else {
     // 未設定 Firebase，掛載空函數避免錯誤
     window.saveToCloud   = async ()=>{};
@@ -4372,17 +4352,40 @@ function guestMode(){
 
 // ==================== 初始化 ====================
 function _init(){
-  // 先嘗試 localStorage（作為畫面快速顯示用）
+  // 先用 localStorage 快速還原畫面
   const restored = loadFromStorage();
-  if(!restored){
-    initData(); // 第一次使用
-  }
-  // 設定為已登入
+  if(!restored) initData();
   STATE.login = {loggedIn:true, empNo:'03250', role:'admin', name:'中壢課'};
   showPage('dashboard');
   updateSaveStatus();
-  // 通知 Firebase 模組啟動，Firebase 載入成功後會覆蓋畫面
-  window.dispatchEvent(new Event('schedule-ready'));
+
+  // 等待 Firebase module 載入完成（最多 8 秒，每 200ms 輪詢）
+  let waited = 0;
+  const tryCloud = setInterval(async ()=>{
+    waited += 200;
+    if(typeof window.saveToCloud === 'function'){
+      clearInterval(tryCloud);
+      // Firebase 就緒，嘗試從雲端載入
+      const cloudOk = await window.loadFromCloud();
+      if(cloudOk){
+        showToast('☁️ 已從雲端載入最新班表');
+        showPage(STATE.currentPage || 'dashboard');
+      } else {
+        // 雲端無資料 → 把本機資料推上去
+        const hasLocal = localStorage.getItem('schedule_system_v1');
+        if(hasLocal){
+          console.log('☁️ 雲端無資料，推送本機資料...');
+          await window.saveToCloud(false);
+          showToast('☁️ 本機資料已推送至雲端');
+        }
+      }
+      if(window.startCloudSync) window.startCloudSync();
+    } else if(waited >= 8000){
+      clearInterval(tryCloud);
+      console.warn('Firebase 載入超時，使用本機模式');
+      showToast('⚠️ 雲端連線失敗，使用本機資料', 'warn');
+    }
+  }, 200);
 }
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded',_init);
