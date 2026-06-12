@@ -221,9 +221,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
       try{
         await setDoc(doc(db, 'schedules', key), payload);
         if(showMsg && window.showToast) showToast('☁️ 已同步至雲端');
+        if(window.updateSaveStatus) updateSaveStatus(true);
       }catch(e){
         console.warn('Firebase 同步失敗:', e);
         if(showMsg && window.showToast) showToast('⚠️ 雲端同步失敗，資料已存本機');
+        if(window.updateSaveStatus) updateSaveStatus(false);
       }
     };
 
@@ -245,6 +247,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
         if(data.storeShiftTimes)  STATE.storeShiftTimes  = data.storeShiftTimes;
         if(data.biweeklyAnchor)   STATE.biweeklyAnchor   = data.biweeklyAnchor;
         if(data.biweeklyOverrides)STATE.biweeklyOverrides= data.biweeklyOverrides;
+        // 雲端載入後同步更新 localStorage，確保兩邊一致
+        if(window.saveToStorage) saveToStorage();
         console.log('☁️ 已從 Firestore 載入', key, '儲存時間:', data.savedAt, '儲存者:', data.savedBy);
         return true;
       }catch(e){
@@ -276,17 +280,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
       });
     };
 
-    // ── 攔截 autoSave：操作後 2 秒自動同步至雲端 ──
-    const _origAutoSave = window.autoSave;
-    let _cloudSaveTimer = null;
-    window.autoSave = function(){
-      if(_origAutoSave) _origAutoSave(); // 仍保留 localStorage 備份
-      // 雲端同步節流：2 秒後推送
-      if(_cloudSaveTimer) clearTimeout(_cloudSaveTimer);
-      _cloudSaveTimer = setTimeout(()=> window.saveToCloud(false), 2000);
-    };
-
     // ── 啟動：Firebase 優先，失敗才用 localStorage ──
+    // （autoSave 已直接呼叫 window.saveToCloud，不需攔截）
     window.addEventListener('schedule-ready', async ()=>{
       const cloudOk = await window.loadFromCloud();
       if(cloudOk){
@@ -4204,21 +4199,35 @@ function clearStorage(){
 }
 
 // 自動儲存：每次 showPage 和重要操作後觸發
+// localStorage 立即存，雲端 2 秒節流後推送
 let _saveTimer=null;
+let _cloudTimer=null;
 function autoSave(){
+  // localStorage：500ms debounce
   if(_saveTimer) clearTimeout(_saveTimer);
   _saveTimer=setTimeout(()=>{
     saveToStorage();
     updateSaveStatus();
-  },500); // debounce 500ms
+  },500);
+  // 雲端：2000ms debounce（節流避免頻繁寫 Firestore）
+  if(_cloudTimer) clearTimeout(_cloudTimer);
+  _cloudTimer=setTimeout(()=>{
+    if(window.saveToCloud) window.saveToCloud(false);
+  },2000);
 }
 
-function updateSaveStatus(){
+function updateSaveStatus(cloudOk){
   const el=document.getElementById('save-status');
   if(!el) return;
   const now=new Date();
-  el.textContent=`☁️ ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')} 已同步`;
-  el.style.color='rgba(255,255,255,0.6)';
+  const t=`${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  if(cloudOk===false){
+    el.textContent=`💾 ${t} 本機已存`;
+    el.style.color='rgba(255,200,100,0.9)';
+  } else {
+    el.textContent=`☁️ ${t} 已同步`;
+    el.style.color='rgba(255,255,255,0.6)';
+  }
 }
 
 // Toast 通知
