@@ -977,14 +977,15 @@ function autoScheduleGroup(y,m,gid){
       const needOff=Math.max(0, offTarget-specialCount);
       if(needOff===0) return;
 
-      // 可排公休的天（空格且可休）
+      // [v10修正] 可排公休的天：空格、可休、且當天同店休息人數未超限
       const available=periodDays.filter(d=>{
         if(ms[s.id]?.[d]) return false;
         return canTakeOff(s.id, d);
       });
       if(available.length===0) return;
 
-      // 均勻分布：把可用天等分成 needOff+1 段，取每段中間點
+      // [v10修正] 均勻分布：每人選公休前排除已被同店其他人選走的天
+      // 避免三人同天休，canTakeOff 擋住後排的人導致公休排不滿
       const offDays=[];
       const total=available.length;
       for(let i=0;i<needOff;i++){
@@ -1000,10 +1001,9 @@ function autoScheduleGroup(y,m,gid){
     });
   });
 
-  // 連上6天強制休（最後保險）：掃一遍，發現連6天未休就強插公休
-  // 注意：此時 ms 格子可能是 off / leave / meeting / training / work / undefined(空)
-  // isRest = 已有非上班安排 → 重置計數
-  // 空格(undefined) 或 work → 算連班天，達6天則插公休
+  // [v10修正] 連上6天強制休（最後保險）
+  // 只掃 type==='work' 的格，空格不算連班
+  // 原本空格也算連班 → 公休分配後大量空格 → 保險狂插公休 → 超標
   staffList.forEach(s=>{
     let consecutive=0;
     for(let d=1;d<=days;d++){
@@ -1011,19 +1011,25 @@ function autoScheduleGroup(y,m,gid){
       const isRest=c&&(c.type==='off'||c.type==='leave'||c.type==='meeting'||c.type==='training');
       if(isRest){
         consecutive=0;
-      } else {
+      } else if(c&&c.type==='work'){
+        // 只有已排班格才算連班
         consecutive++;
         if(consecutive>=6){
-          // 空格（undefined）才能插公休；work格若是鎖定的就不動
-          if(!c){ // 空格 → 插公休
-            if(canTakeOff(s.id,d)){
-              ms[s.id][d]={type:'off'};
-              consecutive=0;
+          // 往後找第一個空格插公休
+          let inserted=false;
+          for(let dd=d;dd<=days&&!inserted;dd++){
+            if(!ms[s.id]?.[dd]){
+              if(canTakeOff(s.id,dd)){
+                ms[s.id][dd]={type:'off'};
+                consecutive=0;
+                inserted=true;
+              }
             }
           }
-          // work格（已排班）：連班到第6天了但沒空格可插，只能繼續，
-          // 實際上因為排班時受 weekWorked 限制（每週最多6天），理論上不會超過
         }
+      } else {
+        // 空格：重置連班計數
+        consecutive=0;
       }
     }
   });
