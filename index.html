@@ -351,7 +351,7 @@ window.STATE={
   currentMonth:new Date().getMonth()+1,
   staff:[],stores:[],schedules:{},specialEvents:[],shifts:[],
   staffAssignments:{},
-  biweeklyAnchor:'2025-07-05',
+  biweeklyAnchor:'2025-07-06',
   biweeklyOverrides:{},
   login:{loggedIn:false,empNo:'',role:'guest'},
   storeViewNotes:{},
@@ -548,7 +548,7 @@ function getMS(y,m){const k=schedKey(y,m);if(!STATE.schedules[k])STATE.schedules
 function getSD(sid,y,m){const ms=getMS(y,m);if(!ms[sid])ms[sid]={};return ms[sid]}
 
 // ── 雙週計算 ──
-// 從錨點 2025-07-05 往前/後推，每14天一個週期
+// 從錨點 2025-07-06 往前/後推，每14天一個週期
 function getAnchorDate(y, m){
   const key = `${y}-${pad(m)}`;
   if(STATE.biweeklyOverrides[key]){
@@ -2998,11 +2998,11 @@ function renderSettings(){
   <div class="card">
     <div class="card-title">📅 兩週變形工時設定</div>
     <div class="alert alert-info" style="margin-bottom:12px">
-      ℹ️ 以 <strong>2025/7/5</strong> 為基準錨點，每14天一個雙週週期，自動推算全年。每月可手動覆寫起始日。<br>
-      工時規則：兩週10工作天 × 8小時 = <strong>80小時</strong>（含用餐0.5h，計薪8h）
+      ℹ️ 以 <strong>2025/7/6</strong> 為基準錨點，每14天一個雙週週期，自動推算全年。每月可手動覆寫起始日。<br>
+      工時規則：兩週10工作天 × 8小時值勤 = <strong>80小時</strong>（扣用餐0.5h，計薪7.5h/天）
     </div>
     <div class="form-group" style="max-width:320px;margin-bottom:16px">
-      <label>全域錨點基準日（預設 2025/7/5）</label>
+      <label>全域錨點基準日（預設 2025/7/6）</label>
       <input type="date" id="anchorDate" value="${STATE.biweeklyAnchor}"
         style="font-size:13px"
         onchange="STATE.biweeklyAnchor=this.value;showPage('settings')">
@@ -3015,22 +3015,7 @@ function renderSettings(){
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">班別設定</div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>班別代碼</th><th>說明</th><th>計薪時數</th><th>操作</th></tr></thead>
-      <tbody>${STATE.shifts.map(sh=>`<tr>
-        <td>${sh.name}（${sh.code}）</td>
-        <td style="font-size:11px;color:var(--text2)">${sh.note||''}</td>
-        <td><span style="font-size:11px;color:var(--text2)">依各店APOC上下班時間動態計算</span></td>
-        <td>
-          <button class="btn btn-outline btn-sm" onclick="openEditShiftModal('${sh.id}')">編輯</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteShift('${sh.id}')">刪除</button>
-        </td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-    <div style="margin-top:12px"><button class="btn btn-primary" onclick="openAddShiftModal()">＋ 新增班別</button></div>
-  </div>
+
 
   <div class="card">
     <div class="card-title">🕐 各店 APOC 時間總覽</div>
@@ -4147,7 +4132,7 @@ function loadFromStorage(){
     STATE.schedules=data.schedules;
     STATE.specialEvents=data.specialEvents||[];
     STATE.staffAssignments=data.staffAssignments||{};
-    STATE.biweeklyAnchor=data.biweeklyAnchor||'2025-07-05';
+    STATE.biweeklyAnchor=data.biweeklyAnchor||'2025-07-06';
     STATE.biweeklyOverrides=data.biweeklyOverrides||{};
     STATE.storeViewNotes=data.storeViewNotes||{};
     STATE.storeShiftTimes=data.storeShiftTimes||{};
@@ -4270,7 +4255,7 @@ function importJSON(){
           STATE.schedules=data.schedules;
           STATE.specialEvents=data.specialEvents||[];
           STATE.staffAssignments=data.staffAssignments||{};
-          STATE.biweeklyAnchor=data.biweeklyAnchor||'2025-07-05';
+          STATE.biweeklyAnchor=data.biweeklyAnchor||'2025-07-06';
           STATE.biweeklyOverrides=data.biweeklyOverrides||{};
           STATE.storeViewNotes=data.storeViewNotes||{};
           STATE.storeShiftTimes=data.storeShiftTimes||{};
