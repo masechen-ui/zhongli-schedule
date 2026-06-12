@@ -186,9 +186,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   const FB_READY = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
 
   if(FB_READY){
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const { initializeApp } = await import("https://cdn.jsdelivr.net/npm/firebase@10.12.0/app/+esm");
     const { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp }
-      = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+      = await import("https://cdn.jsdelivr.net/npm/firebase@10.12.0/firestore/+esm");
 
     const app = initializeApp(FIREBASE_CONFIG);
     const db  = getFirestore(app);
@@ -293,8 +293,15 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
         if(window.showToast) showToast('☁️ 已從雲端載入最新班表');
         if(window.showPage)  showPage(window.STATE?.currentPage || 'dashboard');
       } else {
-        // Firebase 載入失敗 → 提示使用者（localStorage 已在 _init 載入）
-        if(window.showToast) showToast('⚠️ 雲端連線失敗，使用本機資料（離線模式）','warn');
+        // Firestore 無此月份資料 → 本機有資料就自動推送一次，建立雲端副本
+        const hasLocal = localStorage.getItem('schedule_system_v1');
+        if(hasLocal){
+          console.log('☁️ 雲端無資料，自動推送本機資料到 Firestore...');
+          await window.saveToCloud(false);
+          if(window.showToast) showToast('☁️ 已將本機資料推送至雲端');
+        } else {
+          if(window.showToast) showToast('ℹ️ 雲端與本機均無資料，使用初始資料','warn');
+        }
       }
       window.startCloudSync();
     });
@@ -3093,6 +3100,7 @@ function renderSettings(){
     <div class="card-title">資料管理</div>
     <div id="storage-info" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-success" onclick="pushToCloud()">☁️ 推送本機資料到雲端</button>
       <button class="btn btn-info" onclick="loadFromCloud().then(ok=>{if(ok){showPage('dashboard');showToast('☁️ 已從雲端載入最新資料');}else{showToast('⚠️ 雲端無資料或連線失敗','warn');}})">☁️ 重新從雲端載入</button>
       <button class="btn btn-outline" onclick="exportJSON()">⬇ 匯出備份 JSON</button>
       <button class="btn btn-outline" onclick="importJSON()">⬆ 匯入備份 JSON</button>
@@ -4224,6 +4232,27 @@ function showToast(msg, type='success'){
     background:${type==='error'?'#C0392B':type==='warn'?'#E67E22':'#27AE60'};color:#FFF`;
   document.body.appendChild(div);
   setTimeout(()=>{div.style.opacity='0';setTimeout(()=>div.remove(),300)},2500);
+}
+
+function pushToCloud(){
+  if(!window.saveToCloud){
+    showToast('⚠️ Firebase 未初始化，無法推送','warn');
+    return;
+  }
+  if(!confirm('確定要將本機資料推送到雲端嗎？\n這會覆蓋雲端現有的資料。')) return;
+  showToast('正在推送到雲端...');
+  window.saveToCloud(false).then(()=>{
+    showToast('✅ 本機資料已成功推送到雲端');
+    // 推送成功後同步一次確認
+    setTimeout(()=>{
+      window.loadFromCloud().then(ok=>{
+        if(ok) showToast('☁️ 雲端資料確認成功');
+      });
+    }, 1500);
+  }).catch(e=>{
+    console.error('推送失敗:',e);
+    showToast('⚠️ 推送失敗：'+e.message,'warn');
+  });
 }
 
 function exportJSON(){
