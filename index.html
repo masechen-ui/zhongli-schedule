@@ -702,7 +702,7 @@ function calcShiftHours(store, shiftCode, dow){
 
   const totalH=totalMin/60;
   // 用餐時間：在店超過8小時 → 1小時；否則 → 0.5小時
-  const mealH=totalH>8?1:0.5;
+  const mealH=totalH<4?0:totalH>9?1:0.5;
   const workH=Math.round((totalH-mealH)*2)/2; // 四捨五入到 0.5
 
   return {workH, mealH};
@@ -943,27 +943,10 @@ function autoScheduleGroup(y,m,gid){
   // 單人店（正大/融辰）只有A班 10.5h → 雙週80h只夠上7天 → 公休應為7天/雙週
   // v7 公休預分配固定只放4天，多出的公休被80h上限擠到雙週尾端（連三休）
   function estimateAvgShiftH(s){
-    const stIds=getAssignedStores(s.id);
-    const sts=stIds.map(sid=>STATE.stores.find(x=>x.id===sid)).filter(Boolean);
-    if(sts.length===0) return 8;
-    let sum=0,n=0;
-    sts.forEach(st=>{
-      const dow=3; // 以週三為代表日
-      const aH=calcShiftHours(st,'A',dow).workH||0;
-      const oStart=getShiftStartTime(st.storeNo,'O',dow);
-      const pStart=getShiftStartTime(st.storeNo,'P',dow);
-      if((st.staffAlloc||1)<2&&oStart){
-        // 單人覆蓋型店（睡衣等）：多數日子排O班顧全天 → 用O班時數估
-        sum+=calcShiftHours(st,'O',dow).workH||aH;
-      } else if(pStart){
-        const pH=calcShiftHours(st,'P',dow).workH||0;
-        sum+=(aH+pH)/2; // 有P班的多人店：A/P各半
-      } else {
-        sum+=aH; // 只有A班的店（正大/融辰）
-      }
-      n++;
-    });
-    return n?Math.max(4, sum/n):8;
+    // [v10] 固定回傳8h（標準班基準）
+    // 系統只排標準班（A/P=8h值勤），加班由組長手動調整
+    // 雙週80h ÷ 8h = 10天可工作，公休自然落在4天，符合勞基法
+    return 8;
   }
 
   // ── [修正C+I·v8] 公休分配：雙週內均勻分布 ──
