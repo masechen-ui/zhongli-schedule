@@ -4242,21 +4242,6 @@ async function pushToCloud(){
     showToast('⚠️ 推送失敗：'+e.message,'warn');
   }
 }
-  if(!confirm('確定要將本機資料推送到雲端嗎？\n這會覆蓋雲端現有的資料。')) return;
-  showToast('正在推送到雲端...');
-  window.saveToCloud(false).then(()=>{
-    showToast('✅ 本機資料已成功推送到雲端');
-    // 推送成功後同步一次確認
-    setTimeout(()=>{
-      window.loadFromCloud().then(ok=>{
-        if(ok) showToast('☁️ 雲端資料確認成功');
-      });
-    }, 1500);
-  }).catch(e=>{
-    console.error('推送失敗:',e);
-    showToast('⚠️ 推送失敗：'+e.message,'warn');
-  });
-}
 
 function exportJSON(){
   // 匯出目前 STATE 為 JSON 備份
