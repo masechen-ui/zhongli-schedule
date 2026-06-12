@@ -194,7 +194,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
     const db  = getFirestore(app);
 
     // ── 固定使用同一個 document key，存全部資料 ──
-    const CLOUD_KEY = 'zhongli-main';
+    const CLOUD_KEY = 'schedule';
 
     // ── 雲端儲存：把完整 STATE 推到 Firestore ─────
     window.saveToCloud = async function(showMsg=false){
