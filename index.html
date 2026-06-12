@@ -199,6 +199,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
     // ── 雲端儲存：把完整 STATE 推到 Firestore ─────
     window.saveToCloud = async function(showMsg=false){
       if(!window.STATE) return;
+      const _now = new Date().toISOString();
+      // 推送前先記錄時間戳，確保 onSnapshot 收到時已能識別為自己推的
+      window._lastSavedAt = _now;
       const payload = {
         staff:            STATE.staff,
         stores:           STATE.stores,
@@ -211,14 +214,12 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
         storeShiftTimes:  STATE.storeShiftTimes || {},
         biweeklyAnchor:   STATE.biweeklyAnchor,
         biweeklyOverrides:STATE.biweeklyOverrides,
-        savedAt:          new Date().toISOString(),
+        savedAt:          _now,
         savedBy:          STATE.login?.empNo || 'unknown',
         updatedAt:        serverTimestamp(),
       };
       try{
         await setDoc(doc(db, 'app', CLOUD_KEY), payload);
-        // 推送成功後記錄時間戳，讓 onSnapshot 知道這是自己推的，不需要重新載入
-        window._lastSavedAt = payload.savedAt;
         if(showMsg && window.showToast) showToast('☁️ 已同步至雲端');
         if(window.updateSaveStatus) updateSaveStatus(true);
         console.log('☁️ 已推送至 Firestore, savedAt:', payload.savedAt);
@@ -275,8 +276,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
         const data = snap.data();
         const remoteBy  = data.savedBy  || '';
         const remoteSAt = data.savedAt  || '';
-        // 時間戳相同 → 是自己剛推送的，忽略
-        if(remoteSAt === window._lastSavedAt) return;
+        // 時間戳相同，或差距在 2 秒內 → 是自己剛推送的，忽略
+        const remoteMs = remoteSAt ? new Date(remoteSAt).getTime() : 0;
+        const lastMs   = window._lastSavedAt ? new Date(window._lastSavedAt).getTime() : 0;
+        if(Math.abs(remoteMs - lastMs) < 2000) return;
         window._lastSavedAt = remoteSAt;
         // 雲端載入鎖定中 → 忽略（避免 loadFromCloud 完成後自己推送再觸發）
         if(window._cloudLoadingLock) return;
