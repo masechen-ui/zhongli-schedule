@@ -1292,8 +1292,9 @@ function autoScheduleGroup(y,m,gid){
       }
     });
 
-    // 沒有安排的格子 → 公休
-    staffList.forEach(s=>{if(!ms[s.id][d])ms[s.id][d]={type:'off'}});
+    // [v10修正] 移除「空格→公休」
+    // 公休只來自上方公休分配段，確保剛好 monthOffTarget 天
+    // 原本這行把所有排不到班的空格都填成公休，造成公休 12~16 天
   }
   return ms;
 }
