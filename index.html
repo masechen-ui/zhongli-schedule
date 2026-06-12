@@ -538,7 +538,7 @@ function initData(){
     '300051L':{A:{mon:'09:30',tue:'09:30',wed:'09:30',thu:'09:30',fri:'09:30',sat:'09:00',sun:'09:00'},O:{},P:{},C:{}},
     '300097L':{A:{mon:'09:30',tue:'09:30',wed:'09:30',thu:'09:30',fri:'09:30',sat:'09:30',sun:'09:30'},O:{},P:{},C:{}},
     '309005J':{A:{mon:'10:30',tue:'10:30',wed:'10:30',thu:'10:30',fri:'10:30',sat:'10:30',sun:'10:30'},O:{mon:'10:30',tue:'10:30',wed:'10:30',thu:'10:30',fri:'10:30',sat:'10:30',sun:'10:30'},P:{mon:'16:00',tue:'16:00',wed:'16:00',thu:'16:00',fri:'16:00',sat:'16:00',sun:'16:00'},C:{}},
-    '308005N_g1':{A:{mon:'10:30',tue:'10:30',wed:'10:30',thu:'10:30',fri:'10:30',sat:'10:30',sun:'10:30'},O:{mon:'10:30',tue:'10:30',wed:'10:30',thu:'10:30',fri:'10:30',sat:'10:30',sun:'10:30'},P:{mon:'16:00',tue:'16:00',wed:'16:00',thu:'16:00',fri:'16:00',sat:'16:00',sun:'16:00'},C:{}},
+    // 308005N_g1 已合併至 308005N（重複資料已移除）
   };
   if(!STATE.storeShiftTimes) STATE.storeShiftTimes={};
 
@@ -2376,8 +2376,20 @@ function renderCell(c,staffId,day,y,m,borderStyle=''){
     const code=sh?.code||sh?.name?.charAt(0)||'A';
     const cls=shiftCellClass(code);
     const locked=c.locked?'cell-locked':'';
-    const title=`${st?.name||''} ${sh?.name||''} ${sh?.start&&sh.start?sh.start+'–'+sh.end:''}`;
-    return `<td class="${cls} ${locked}" ${bs} onclick="openCellEdit('${staffId}',${day},${y},${m})" title="${title}">${storeName}<br><span style="font-size:9px;font-weight:700">${code}</span></td>`;
+    const dow2=getDOW(y,m,day);
+    const workH=getCellWorkH(c,st,dow2);
+    const isCustomH=c.customHours!=null;
+    // 加班警示：計算此人此雙週累計工時，超過80h標橘色邊框
+    const periods=getBiweeklyPeriods(y,m);
+    const pidx=getBiweeklyIdxForDay(y,m,day,periods);
+    const period=periods.find(p=>p.idx===pidx);
+    const periodH=period?calcPeriodHours(staffId,period.periodStart,period.periodEnd):0;
+    const periodMaxH=period?Math.round((period.days.length/14)*80):80;
+    const isOvertime=periodH>periodMaxH;
+    const overtimeStyle=isOvertime?'outline:2px solid #E67E22;outline-offset:-2px;':'';
+    const hoursLabel=isCustomH?`<span style="font-size:8px;color:#E67E22;font-weight:700">${workH}h✎</span>`:'';
+    const title=`${st?.name||''} ${sh?.name||''} 服勤${workH}h${isCustomH?' (手動)':'(自動)'}${isOvertime?' ⚠️雙週累計'+periodH.toFixed(1)+'h 超過'+periodMaxH+'h':''}`;
+    return `<td class="${cls} ${locked}" style="${overtimeStyle}" ${bs} onclick="openCellEdit('${staffId}',${day},${y},${m})" title="${title}">${storeName}<br><span style="font-size:9px;font-weight:700">${code}</span>${hoursLabel}</td>`;
   }
   return `<td ${bs} onclick="openCellEdit('${staffId}',${day},${y},${m})">–</td>`;
 }
@@ -2391,7 +2403,15 @@ function openCellEdit(staffId,day,y,m,returnPage){
   const storeOptions=STATE.stores.map(st=>
     `<option value="${st.id}" ${c.storeId===st.id?'selected':''}>${st.name}</option>`).join('');
   const shiftOptions=STATE.shifts.map(sh=>
-    `<option value="${sh.id}" ${c.shiftId===sh.id?'selected':''}>${sh.name} (${sh.start}–${sh.end})</option>`).join('');
+    `<option value="${sh.id}" ${c.shiftId===sh.id?'selected':''}>${sh.name}</option>`).join('');
+
+  // 計算預設工時（自動推算，供組長參考）
+  const selStore=STATE.stores.find(x=>x.id===c.storeId);
+  const selShift=STATE.shifts.find(x=>x.id===c.shiftId);
+  const dow=getDOW(y,m,day);
+  const autoCalc=selStore&&selShift?calcShiftHours(selStore,selShift.code,dow):{workH:'',mealH:''};
+  const defaultWorkH=c.customHours!=null?c.customHours:(autoCalc.workH||'');
+  const defaultMealH=c.customMeal!=null?c.customMeal:(autoCalc.mealH||'');
 
   showModal(`
   <div class="modal">
@@ -2410,15 +2430,30 @@ function openCellEdit(staffId,day,y,m,returnPage){
       </div>
       <div id="ce-store-group" class="form-group" ${c.type!=='work'?'style="display:none"':''}>
         <label>店家</label>
-        <select id="ce-store">${storeOptions}</select>
+        <select id="ce-store" onchange="updateCellAutoHours('${staffId}',${day},${y},${m})">${storeOptions}</select>
       </div>
       <div id="ce-shift-group" class="form-group" ${c.type!=='work'?'style="display:none"':''}>
         <label>班別</label>
-        <select id="ce-shift">${shiftOptions}</select>
+        <select id="ce-shift" onchange="updateCellAutoHours('${staffId}',${day},${y},${m})">${shiftOptions}</select>
+      </div>
+      <div id="ce-hours-group" class="form-group" ${c.type!=='work'?'style="display:none"':''}>
+        <label>服勤時數 <span style="font-size:11px;color:var(--text2)">(自動計算，可手動覆蓋)</span></label>
+        <input id="ce-workhours" type="number" step="0.5" min="0" max="16"
+          value="${defaultWorkH}" placeholder="自動推算" style="width:100px">
+        <span style="font-size:12px;color:var(--text2);margin-left:8px">小時</span>
+      </div>
+      <div id="ce-meal-group" class="form-group" ${c.type!=='work'?'style="display:none"':''}>
+        <label>用餐時數 <span style="font-size:11px;color:var(--text2)">(自動計算，可手動覆蓋)</span></label>
+        <input id="ce-mealhours" type="number" step="0.5" min="0" max="2"
+          value="${defaultMealH}" placeholder="自動推算" style="width:100px">
+        <span style="font-size:12px;color:var(--text2);margin-left:8px">小時</span>
+      </div>
+      <div id="ce-hours-hint" style="${c.type!=='work'?'display:none':''}grid-column:1/-1;font-size:11px;color:var(--text2);margin-top:-8px">
+        💡 留空則依店家APOC自動計算；遇到加班截短（如 A班只上到 5.5h）請手動填入實際時數
       </div>
       <div class="form-group" style="grid-column:1/-1">
         <label>備註</label>
-        <input id="ce-note" value="${c.note||''}" placeholder="選填">
+        <input id="ce-note" value="${c.note||''}" placeholder="選填，例：代班來源、加班原因">
       </div>
     </div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
@@ -2438,8 +2473,24 @@ function openCellEdit(staffId,day,y,m,returnPage){
 function updateCellEditForm(){
   const t=document.getElementById('ce-type').value;
   const isWork=t==='work';
-  document.getElementById('ce-store-group').style.display=isWork?'':'none';
-  document.getElementById('ce-shift-group').style.display=isWork?'':'none';
+  ['ce-store-group','ce-shift-group','ce-hours-group','ce-meal-group','ce-hours-hint'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display=isWork?'':'none';
+  });
+}
+function updateCellAutoHours(staffId,day,y,m){
+  const storeId=document.getElementById('ce-store')?.value;
+  const shiftId=document.getElementById('ce-shift')?.value;
+  const whEl=document.getElementById('ce-workhours');
+  const mhEl=document.getElementById('ce-mealhours');
+  if(!storeId||!shiftId||!whEl||!mhEl) return;
+  const store=STATE.stores.find(x=>x.id===storeId);
+  const shift=STATE.shifts.find(x=>x.id===shiftId);
+  if(!store||!shift) return;
+  const dow=getDOW(y,m,day);
+  const calc=calcShiftHours(store,shift.code,dow);
+  if(!whEl.dataset.manual) whEl.value=calc.workH||'';
+  if(!mhEl.dataset.manual) mhEl.value=calc.mealH||'';
 }
 
 function saveCellEdit(staffId,day,y,m,returnPage){
@@ -2449,7 +2500,21 @@ function saveCellEdit(staffId,day,y,m,returnPage){
   const note=document.getElementById('ce-note').value;
   const locked=document.getElementById('ce-locked').checked;
   if(type==='work'){
-    ms[staffId][day]={type:'work',storeId:document.getElementById('ce-store').value,shiftId:document.getElementById('ce-shift').value,note,locked};
+    const whVal=document.getElementById('ce-workhours')?.value;
+    const mhVal=document.getElementById('ce-mealhours')?.value;
+    const storeId=document.getElementById('ce-store').value;
+    const shiftId=document.getElementById('ce-shift').value;
+    // 計算自動推算值，只有在手動值跟自動值不同時才存 customHours
+    const store=STATE.stores.find(x=>x.id===storeId);
+    const shift=STATE.shifts.find(x=>x.id===shiftId);
+    const dow=getDOW(y,m,day);
+    const auto=store&&shift?calcShiftHours(store,shift.code,dow):{workH:null,mealH:null};
+    const customH=whVal!==''&&whVal!=null&&parseFloat(whVal)!==auto.workH?parseFloat(whVal):undefined;
+    const customM=mhVal!==''&&mhVal!=null&&parseFloat(mhVal)!==auto.mealH?parseFloat(mhVal):undefined;
+    const cell={type:'work',storeId,shiftId,note,locked};
+    if(customH!=null) cell.customHours=customH;
+    if(customM!=null) cell.customMeal=customM;
+    ms[staffId][day]=cell;
   } else {
     ms[staffId][day]={type,note,locked};
   }
@@ -2977,10 +3042,11 @@ function renderSettings(){
   <div class="card">
     <div class="card-title">班別設定</div>
     <div class="table-wrap"><table>
-      <thead><tr><th>班別</th><th>開始</th><th>結束</th><th>計薪時數</th><th>操作</th></tr></thead>
+      <thead><tr><th>班別代碼</th><th>說明</th><th>計薪時數</th><th>操作</th></tr></thead>
       <tbody>${STATE.shifts.map(sh=>`<tr>
-        <td>${sh.name}</td><td>${sh.start}</td><td>${sh.end}</td>
-        <td><span style="font-size:11px;color:var(--text2)">依店家APOC設定</span></td>
+        <td>${sh.name}（${sh.code}）</td>
+        <td style="font-size:11px;color:var(--text2)">${sh.note||''}</td>
+        <td><span style="font-size:11px;color:var(--text2)">依各店APOC上下班時間動態計算</span></td>
         <td>
           <button class="btn btn-outline btn-sm" onclick="openEditShiftModal('${sh.id}')">編輯</button>
           <button class="btn btn-danger btn-sm" onclick="deleteShift('${sh.id}')">刪除</button>
@@ -3414,18 +3480,20 @@ function addShift(){
 function openEditShiftModal(id){
   const sh=STATE.shifts.find(s=>s.id===id);if(!sh)return;
   showModal(`<div class="modal"><div class="modal-title">編輯班別：${sh.name}</div>
+    <div class="alert alert-info" style="margin-bottom:10px;font-size:12px">
+      班別代碼（A/P/O/B/C）是顯示標籤。實際工時由各店的APOC上下班時間計算，請至「店家管理」設定各店時間。
+    </div>
     <div class="form-grid">
       <div class="form-group"><label>班別名稱</label><input id="m-shname" value="${sh.name}"></div>
-      <!-- 時數由店家APOC設定動態計算，不需手動輸入 -->
-      <div class="form-group"><label>開始時間</label><input id="m-shstart" type="time" value="${sh.start}"></div>
-      <div class="form-group"><label>結束時間</label><input id="m-shend" type="time" value="${sh.end}"></div>
+      <div class="form-group"><label>備註說明</label><input id="m-shnote" value="${sh.note||''}" placeholder="選填"></div>
     </div>
     <div class="form-actions"><button class="btn btn-outline" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="editShift('${id}')">儲存</button></div>
   </div>`);
 }
 function editShift(id){
   const sh=STATE.shifts.find(s=>s.id===id);if(!sh)return;
-  sh.name=document.getElementById('m-shname').value.trim();sh.start=document.getElementById('m-shstart').value;sh.end=document.getElementById('m-shend').value;
+  sh.name=document.getElementById('m-shname').value.trim();
+  sh.note=document.getElementById('m-shnote').value;
   closeModal();showPage('settings');
 }
 function deleteShift(id){if(!confirm('確認刪除？'))return;STATE.shifts=STATE.shifts.filter(s=>s.id!==id);showPage('settings')}
