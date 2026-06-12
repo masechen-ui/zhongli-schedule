@@ -251,6 +251,12 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
         if(data.storeShiftTimes)  STATE.storeShiftTimes  = data.storeShiftTimes;
         if(data.biweeklyAnchor)   STATE.biweeklyAnchor   = data.biweeklyAnchor;
         if(data.biweeklyOverrides)STATE.biweeklyOverrides= data.biweeklyOverrides;
+        // [v10] 同步 storeShiftTimes → stores，確保 calcShiftHours 能讀到正確時間
+        STATE.stores.forEach(st=>{
+          if(STATE.storeShiftTimes?.[st.storeNo]){
+            st.shiftTimes=STATE.storeShiftTimes[st.storeNo];
+          }
+        });
         // 雲端載入後同步更新 localStorage，確保兩邊一致
         // 雲端載入後只更新 localStorage，不觸發 autoSave 避免回寫循環
         if(window._saveLocalOnly) window._saveLocalOnly();
@@ -4136,6 +4142,12 @@ function loadFromStorage(){
     STATE.biweeklyOverrides=data.biweeklyOverrides||{};
     STATE.storeViewNotes=data.storeViewNotes||{};
     STATE.storeShiftTimes=data.storeShiftTimes||{};
+    // [v10] 同步 storeShiftTimes → stores
+    STATE.stores.forEach(st=>{
+      if(STATE.storeShiftTimes?.[st.storeNo]){
+        st.shiftTimes=STATE.storeShiftTimes[st.storeNo];
+      }
+    });
     // 班別：若已儲存則還原，若空陣列則補回預設（修復舊版本遺失問題）
     if(data.shifts&&data.shifts.length>0){
       STATE.shifts=data.shifts;
