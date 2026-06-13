@@ -87,6 +87,8 @@ tr:hover td{background:var(--surface2)}
 .cell-shiftO{background:var(--shift-o);cursor:pointer}
 .cell-shiftB{background:var(--shift-b);color:#8E44AD;cursor:pointer}
 .cell-shiftC{background:var(--shift-c);color:#1E8449;cursor:pointer}
+.cell-unsched{background:repeating-linear-gradient(45deg,#FFF6E0,#FFF6E0 5px,#FBE6B4 5px,#FBE6B4 10px);color:var(--warn);font-weight:700}
+.pblock td,.pblock th{border:1px solid var(--border)}
 .cell-work:hover,.cell-off:hover,.cell-leave:hover,.cell-meeting:hover{filter:brightness(.92);outline:2px solid var(--accent)}
 .cell-locked{background:#FFF8DC!important;position:relative}
 .cell-locked::after{content:'🔒';font-size:7px;position:absolute;top:1px;right:1px}
@@ -1885,12 +1887,13 @@ function renderStoreView(){
     const assignedStore=STATE.stores.find(x=>getAssignedStores(s.id).includes(x.id)&&x.id===store.id)||store;
 
     // 統計
-    let workH=0,mealH=0,workDays=0,offDays=0,leaveDays=0,otDays=0;
+    let workH=0,mealH=0,workDays=0,offDays=0,leaveDays=0,otDays=0,unsched=0;
     const notesData=STATE.storeViewNotes?.[`${store.id}_${s.id}_${schedKey(y,m)}`]||{};
 
     for(let d=1;d<=days;d++){
       const c=sd[d];
-      if(!c||c.type==='off') offDays++;
+      if(!c) unsched++;
+      else if(c.type==='off') offDays++;
       else if(c.type==='leave') leaveDays++;
       else if(c.type==='work'&&c.storeId===store.id){
         const sh=STATE.shifts.find(x=>x.id===c.shiftId);
@@ -1909,7 +1912,9 @@ function renderStoreView(){
       const weekend=dow===0||dow===6;
       const bgBase=weekend?(pidx%2===0?'#D6EAF8':'#DDD0E8'):(pidx%2===0?'#EAF4FB':'');
       const editBtn=`onclick="openCellEdit('${s.id}',${d},${y},${m},'store-view')" title="點擊修改班別" style="cursor:pointer;"`;
-      if(!c||c.type==='off'){
+      if(!c){
+        shiftCells.push(`<td class="cell-unsched" ${editBtn} style="${bl}text-align:center;font-size:11px;padding:2px">未</td>`);
+      } else if(c.type==='off'){
         shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-off);color:#9B8B7E;padding:2px">X</td>`);
       } else if(c.type==='leave'){
         shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-leave);color:#C0392B;padding:2px">特</td>`);
@@ -2015,7 +2020,7 @@ function renderStoreView(){
     const tdFixM='font-size:10px;padding:3px 6px;background:var(--surface2);font-weight:600;border:1px solid var(--border);white-space:nowrap';
 
     return `
-    <div style="margin-bottom:16px;border:2px solid var(--border);border-radius:8px;overflow:hidden">
+    <div class="pblock" style="margin-bottom:16px;border:2px solid var(--border);border-radius:8px;overflow:hidden">
       <div style="overflow-x:auto">
         <table style="${tStyle}">
           <thead>
@@ -2071,7 +2076,7 @@ function renderStoreView(){
               <td style="${tdFixL}">${roleLabel}</td>
               <td style="${tdFixM}">備註說明</td>
               ${notesCells.join('')}
-              <td style="background:#FFFEF0;border:1px solid var(--border)"></td>
+              <td style="background:#FFFEF0;border:1px solid var(--border);font-size:10px;padding:3px 6px;white-space:nowrap">公休 ${offDays}天<br>特休 ${leaveDays}天</td>
             </tr>
             <tr>
               <td style="${tdFixL}"></td>
@@ -2084,7 +2089,7 @@ function renderStoreView(){
                 const val=(notesData[`ap_${d}`]||'');
                 return `<td style="${bl}padding:1px;background:#F5F5F5;border:1px solid var(--border)"><input value="${val}" style="width:100%;font-size:9px;border:none;background:transparent;text-align:center;padding:1px" onchange="saveStoreNote('${store.id}','${s.id}','${schedKey(y,m)}','ap_${d}',this.value)"></td>`;
               }).join('')}
-              <td style="background:#F5F5F5;border:1px solid var(--border)"></td>
+              <td style="background:#F5F5F5;border:1px solid var(--border);font-size:10px;padding:3px 6px;white-space:nowrap">${unsched?`<span style="color:var(--warn);font-weight:700">未排班 ${unsched}天</span>`:'未排班 0天'}</td>
             </tr>
           </tbody>
         </table>
@@ -2243,8 +2248,8 @@ function renderStaffView(){
     const weekend=dow===0||dow===6;
     const bg=weekend?(pidx%2===0?'#D6EAF8':'#DDD0E8'):(pidx%2===0?'#EAF4FB':'');
     const bl=isNewP?'border-left:3px solid var(--accent);':'';
-    const code=c?.type==='work'?(STATE.shifts.find(x=>x.id===c.shiftId)?.code||'?'):(c?.type==='leave'?'特':c?.type==='meeting'?'會':c?.type==='training'?'訓':'X');
-    const shiftCls=code==='A'?'cell-shiftA':code==='P'?'cell-shiftP':code==='O'?'cell-shiftO':code==='B'?'cell-shiftB':code==='C'?'cell-shiftC':code==='特'?'cell-leave':code==='會'||code==='訓'?'cell-meeting':'cell-off';
+    const code=c?.type==='work'?(STATE.shifts.find(x=>x.id===c.shiftId)?.code||'?'):(c?.type==='leave'?'特':c?.type==='meeting'?'會':c?.type==='training'?'訓':c?.type==='off'?'X':'未');
+    const shiftCls=code==='A'?'cell-shiftA':code==='P'?'cell-shiftP':code==='O'?'cell-shiftO':code==='B'?'cell-shiftB':code==='C'?'cell-shiftC':code==='特'?'cell-leave':code==='會'||code==='訓'?'cell-meeting':code==='未'?'cell-unsched':'cell-off';
     const stName=c?.type==='work'?(STATE.stores.find(x=>x.id===c.storeId)?.name?.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'').substring(0,4)||'–'):'';
     const startTime=c?.type==='work'?getShiftStartTime(store?.storeNo||'',code,dow)||'–':'';
     dCells.push({d,dow,bg,bl,code,shiftCls,stName,startTime,c,pid:pidx});
@@ -2301,7 +2306,7 @@ function renderStaffView(){
 
   <div class="alert alert-info" style="font-size:11px">${icon('edit')} <strong>班別格可直接點擊修改</strong>（儲存後留在本頁）</div>
 
-  <div style="overflow-x:auto">
+  <div class="pblock" style="overflow-x:auto">
     <table style="border-collapse:collapse;font-size:11px">
       <thead>
         <tr>
@@ -2389,10 +2394,11 @@ function renderPersonBlock(s, y, m, opts){
   const noteKey=`${store?store.id:'_'}_${s.id}_${schedKey(y,m)}`;
   const notesData=STATE.storeViewNotes?.[noteKey]||{};
 
-  let workH=0,mealH=0,workDays=0,offDays=0,leaveDays=0;
+  let workH=0,mealH=0,workDays=0,offDays=0,leaveDays=0,unsched=0;
   for(let d=1;d<=days;d++){
     const c=sd[d];
-    if(!c||c.type==='off') offDays++;
+    if(!c) unsched++;
+    else if(c.type==='off') offDays++;
     else if(c.type==='leave') leaveDays++;
     else if(c.type==='work'){
       const stx=STATE.stores.find(q=>q.id===c.storeId); const dw=getDOW(y,m,d);
@@ -2415,13 +2421,14 @@ function renderPersonBlock(s, y, m, opts){
     const mt=meta(d); const c=sd[d];
     dateHeaders.push(`<th style="min-width:26px;font-size:9px;background:${mt.bg};${mt.bl}padding:2px 1px;text-align:center">${m.toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}</th>`);
     dowCells.push(`<td style="text-align:center;font-size:10px;background:${mt.bg};${mt.bl}padding:2px">${DAY_NAMES[mt.dow]}</td>`);
-    let code='',bg='';
-    if(!c||c.type==='off'){code='X';bg='var(--shift-off)';}
+    let code='',bg='',cls='';
+    if(!c){code='未';cls=' class="cell-unsched"';}
+    else if(c.type==='off'){code='X';bg='var(--shift-off)';}
     else if(c.type==='leave'){code='特';bg='var(--shift-leave)';}
     else if(c.type==='meeting'){code='會';bg='var(--shift-meeting)';}
     else if(c.type==='training'){code='訓';bg='var(--shift-meeting)';}
     else if(c.type==='work'){const sh=STATE.shifts.find(x=>x.id===c.shiftId);code=sh?.code||'?';bg=code==='A'?'var(--shift-a)':code==='P'?'var(--shift-p)':code==='O'?'var(--shift-o)':code==='B'?'var(--shift-b)':code==='C'?'var(--shift-c)':'var(--shift-work)';}
-    shiftCells.push(`<td style="${mt.bl}text-align:center;font-size:11px;font-weight:700;background:${bg};padding:2px">${code}</td>`);
+    shiftCells.push(`<td${cls} style="${mt.bl}text-align:center;font-size:11px;font-weight:700;${bg?`background:${bg};`:''}padding:2px">${code}</td>`);
     if(c&&c.type==='work'){const stx=STATE.stores.find(q=>q.id===c.storeId);const dw=getDOW(y,m,d);
       wtCells.push(`<td style="${mt.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${getCellWorkH(c,stx,dw)}</td>`);
       mealCells.push(`<td style="${mt.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${getCellMealH(c,stx,dw)||''}</td>`);
@@ -2442,7 +2449,7 @@ function renderPersonBlock(s, y, m, opts){
   const statusTag=(s.status&&s.status!=='active')?`<span class="badge" style="background:#FDECEA;color:#C0392B;margin-left:4px;font-size:9px">${({sick:'病假',parental:'育嬰假',excluded:'排除',resigned:'離職'}[s.status]||s.status)}</span>`:'';
 
   return `
-  <div style="margin-bottom:16px;border:2px solid var(--border);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-sm)">
+  <div class="pblock" style="margin-bottom:16px;border:2px solid var(--border);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-sm)">
     <div style="overflow-x:auto">
       <table style="border-collapse:collapse;font-size:11px;width:100%">
         <thead><tr>
@@ -2459,7 +2466,7 @@ function renderPersonBlock(s, y, m, opts){
           <tr><td style="${L}">目標：${store&&store.target?Number(store.target).toLocaleString():''}</td><td style="${M}">代班</td>${depCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;text-align:center;border:1px solid var(--border)">${depCount?`<strong>${depCount}次</strong>`:''}</td></tr>
           <tr><td style="${L}">派員：${store?store.staffAlloc:''}</td><td style="${M}">支援</td>${supCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;text-align:center;border:1px solid var(--border)">${supCount?`<strong>${supCount}次</strong>`:''}</td></tr>
           <tr><td style="${L}">公休 ${offDays}天</td><td style="${M}">備註說明</td>${noteCells.join('')}<td style="background:#FFFEF0;border:1px solid var(--border)"></td></tr>
-          <tr><td style="${L}">請假 ${leaveDays}天</td><td style="${M}">AP班</td>${apCells.join('')}<td style="background:#F5F5F5;border:1px solid var(--border)"></td></tr>
+          <tr><td style="${L}">請假 ${leaveDays}天${unsched?` · <span style="color:var(--warn);font-weight:700">未排 ${unsched}</span>`:''}</td><td style="${M}">AP班</td>${apCells.join('')}<td style="background:#F5F5F5;border:1px solid var(--border)"></td></tr>
         </tbody>
       </table>
     </div>
