@@ -1,5 +1,5 @@
 # 中壢課 自動排班系統 — 專案交接文件
-> 建立日期：2026-06-10　最新版本：v11（三視角統一格式）
+> 建立日期：2026-06-10　最新版本：v12（可列印 Excel 匯出 / ExcelJS）
 
 ---
 
@@ -13,7 +13,7 @@
 | Firebase 專案 ID | `schedule-af163` |
 | Firebase config | 已填入 index.html（`FIREBASE_CONFIG` 常數，第 174 行） |
 | Firestore 規則 | `allow read, write: if true`（已設定，無需 Auth） |
-| 主程式檔案 | `index.html`（單一檔案，約 4570 行） |
+| 主程式檔案 | `index.html`（單一檔案，約 4580 行） |
 
 ---
 

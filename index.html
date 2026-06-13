@@ -3943,11 +3943,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
   const staffList=opts.staffList?opts.staffList:(gid?STATE.staff.filter(s=>s.groupId===gid):STATE.staff);
   if(staffList.every(s=>!Object.keys(ms[s.id]||{}).length)){alert('尚未產生班表');return}
 
-  // 動態載入 SheetJS
-  if(!window.XLSX){
+  // 動態載入 ExcelJS（支援列印設定）
+  if(!window.ExcelJS){
     await new Promise((res,rej)=>{
       const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
       s.onload=res;s.onerror=rej;document.head.appendChild(s);
     });
   }
@@ -3955,8 +3955,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
   const days=daysInMonth(y,m);
   const periods=getBiweeklyPeriods(y,m);
   const groupLabel=gid?getGroupName(gid):'中壢課';
-  const wb=XLSX.utils.book_new();
-  const ws={};
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet(`${y}年${m}月`,{
+    pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,margins:{left:0.2,right:0.2,top:0.3,bottom:0.3,header:0.1,footer:0.1}},
+    views:[{showGridLines:false}]
+  });
   const merges=[];
   let R=0; // 目前列數（0-based）
 
@@ -3981,15 +3984,23 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     rowSub:  {fgColor:{rgb:'F7F6F3'}},
   };
 
-  function font(bold,sz,color){return {bold:!!bold,sz:sz||9,color:{rgb:color||'2C2420'},name:'微軟正黑體'}}
-  function border(){return {top:{style:'thin',color:{rgb:'CCCCCC'}},bottom:{style:'thin',color:{rgb:'CCCCCC'}},left:{style:'thin',color:{rgb:'CCCCCC'}},right:{style:'thin',color:{rgb:'CCCCCC'}}}}
-  function thickLeft(){return {top:{style:'thin',color:{rgb:'CCCCCC'}},bottom:{style:'thin',color:{rgb:'CCCCCC'}},left:{style:'medium',color:{rgb:'8B6F5E'}},right:{style:'thin',color:{rgb:'CCCCCC'}}}}
-  function cell(v,fill,fnt,align,bdr,numFmt){
-    return {v,t:typeof v==='number'?'n':'s',s:{fill:{patternType:'solid',...fill},font:fnt||font(),alignment:{horizontal:align||'center',vertical:'center',wrapText:true},border:bdr||border(),...(numFmt?{numFmt}:{})}};
+  const _argb=(rgb)=>'FF'+(rgb||'2C2420');
+  function font(bold,sz,color){return {bold:!!bold,size:sz||9,color:{argb:_argb(color)},name:'微軟正黑體'}}
+  const _bd=(rgb)=>({style:'thin',color:{argb:_argb(rgb)}});
+  function border(){return {top:_bd('CCCCCC'),bottom:_bd('CCCCCC'),left:_bd('CCCCCC'),right:_bd('CCCCCC')}}
+  function thickLeft(){return {top:_bd('CCCCCC'),bottom:_bd('CCCCCC'),left:{style:'medium',color:{argb:_argb('8B6F5E')}},right:_bd('CCCCCC')}}
+  function _toFill(fill){const rgb=(fill&&fill.fgColor)?fill.fgColor.rgb:null;return rgb?{type:'pattern',pattern:'solid',fgColor:{argb:_argb(rgb)}}:null}
+  function cell(v,fill,fnt,align,bdr,numFmt){return {v,fill,font:fnt||font(),align:align||'center',border:bdr||border(),numFmt}}
+  function setCell(c,r,val){
+    const cc=ws.getCell(r+1,c+1);
+    cc.value=(val.v===''||val.v==null)?null:val.v;
+    cc.font=val.font;
+    cc.alignment={horizontal:val.align,vertical:'middle',wrapText:true};
+    cc.border=val.border;
+    const f=_toFill(val.fill); if(f)cc.fill=f;
+    if(val.numFmt)cc.numFmt=val.numFmt;
   }
-
-  function setCell(c,r,val){ws[XLSX.utils.encode_cell({c,r})]=val}
-  function addMerge(rs,re,cs,ce){merges.push({s:{r:rs,c:cs},e:{r:re,c:ce}})}
+  function addMerge(rs,re,cs,ce){merges.push([rs+1,cs+1,re+1,ce+1])}
 
   // 固定欄位數
   const fixedCols=4; // 人員/店編號、項目 + 2備用
@@ -3997,18 +4008,15 @@ async function exportExcelFormatted(y,m,gid,opts={}){
   const statCols=10; // 右側統計
   const totalCols=fixedCols+dataCols+statCols;
 
-  // 欄寬設定
-  const colWidths=[];
-  colWidths.push({wch:12},{wch:8},{wch:8},{wch:8}); // 固定4欄
-  for(let d=0;d<days;d++) colWidths.push({wch:4.5});
-  colWidths.push({wch:8},{wch:8},{wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:7});
-  ws['!cols']=colWidths;
+  // 欄寬設定（套用 ExcelJS；fitToWidth 會再縮放到一頁寬）
+  const colWidths=[13,9,7,7];
+  for(let d=0;d<days;d++) colWidths.push(4.4);
+  for(let i=0;i<statCols;i++) colWidths.push(i<2?9:7);
+  colWidths.forEach((w,i)=>{ws.getColumn(i+1).width=w});
 
   // ── 大標題列 ──
-  setCell(0,R,cell(`${y}-${pad(m)} ${groupLabel} 班表`,C.title,font(true,13,'FFFFFF'),'center',border()));
+  setCell(0,R,cell(`${y}-${pad(m)} ${groupLabel} 班表`,C.title,font(true,14,'FFFFFF'),'center',border()));
   addMerge(R,R,0,totalCols-1);
-  ws[XLSX.utils.encode_cell({c:0,r:R})].s.fill={patternType:'solid',...C.title};
-  ws[XLSX.utils.encode_cell({c:0,r:R})].s.font=font(true,13,'FFFFFF');
   R++;
 
   // 月標準工時、個人月工時標題
@@ -4228,28 +4236,32 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     R++;
   });
 
-  // 列高設定（每人8列+1空列）
+  // 列高設定（放大，方便列印）
   const rowHeights={};
-  rowHeights[0]={hpt:20}; // 大標題
-  rowHeights[1]={hpt:14};
+  rowHeights[0]={hpt:24}; // 大標題
+  rowHeights[1]={hpt:16};
   staffList.forEach((_,si)=>{
     const base=2+si*9;
-    rowHeights[base]={hpt:16};   // 星期
-    rowHeights[base+1]={hpt:18}; // 班別
-    rowHeights[base+2]={hpt:15}; // 服勤
-    rowHeights[base+3]={hpt:15}; // 用餐
-    rowHeights[base+4]={hpt:14}; // 代班
-    rowHeights[base+5]={hpt:14}; // 支援
-    rowHeights[base+6]={hpt:14}; // 備註
-    rowHeights[base+7]={hpt:14}; // AP班
-    rowHeights[base+8]={hpt:6};  // 空列
+    rowHeights[base]={hpt:18};   // 星期
+    rowHeights[base+1]={hpt:24}; // 班別
+    rowHeights[base+2]={hpt:19}; // 服勤
+    rowHeights[base+3]={hpt:19}; // 用餐
+    rowHeights[base+4]={hpt:17}; // 代班
+    rowHeights[base+5]={hpt:17}; // 支援
+    rowHeights[base+6]={hpt:19}; // 備註
+    rowHeights[base+7]={hpt:17}; // AP班
+    rowHeights[base+8]={hpt:8};  // 空列
   });
-  ws['!rows']=Object.values(rowHeights);
-  ws['!merges']=merges;
-  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:R,c:totalCols-1}});
+  Object.entries(rowHeights).forEach(([r,h])=>{ws.getRow(Number(r)+1).height=h.hpt});
+  merges.forEach(mg=>{try{ws.mergeCells(mg[0],mg[1],mg[2],mg[3])}catch(e){}});
+  ws.pageSetup.printTitlesRow='1:1';
 
-  XLSX.utils.book_append_sheet(wb,ws,`${y}年${m}月`);
-  XLSX.writeFile(wb,(opts.fileLabel?`${opts.fileLabel}_${y}年${m}月`:`中壢課班表_${y}年${m}月_${groupLabel}`)+'.xlsx');
+  const fname=(opts.fileLabel?`${opts.fileLabel}_${y}年${m}月`:`中壢課班表_${y}年${m}月_${groupLabel}`)+'.xlsx';
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 // 舊版 CSV 保留為備用
