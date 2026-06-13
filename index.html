@@ -1743,6 +1743,7 @@ function renderScheduleAll(){
   const hasData=allStaff.some(s=>Object.keys(ms[s.id]||{}).length>0);
   const showAll=!!STATE._scheduleAllShowAll;          // 預設 false＝只顯示有班表的人
   const hasSched=(s)=>Object.keys(ms[s.id]||{}).length>0;
+  const sortMode=STATE._scheduleAllSort||'group'; // group=依組別, store=依主店
 
   // 組長工時統計
   // 動態取得所有組別
@@ -1777,6 +1778,7 @@ function renderScheduleAll(){
       <div class="page-sub">${y}年${m}月 · 統合唯讀 · ${groupsData.map(g=>`${g.name}${g.staff.length}人`).join(' / ')}</div>
     </div>
     <div style="display:flex;gap:8px">
+      <button class="btn btn-outline" onclick="STATE._scheduleAllSort=(STATE._scheduleAllSort==='store'?'group':'store');showPage('schedule-all')">${icon(sortMode==='store'?'users':'store')} ${sortMode==='store'?'改依組別':'改依店家'}</button>
       <button class="btn ${showAll?'btn-primary':'btn-outline'}" onclick="STATE._scheduleAllShowAll=!STATE._scheduleAllShowAll;showPage('schedule-all')">${icon(showAll?'user':'users')} ${showAll?'只顯示有班表':'顯示全部人員'}</button>
       <button class="btn btn-outline" onclick="exportExcelAll()">${icon('download')} Excel（全員）</button>
       <button class="btn btn-outline" onclick="window.print()">${icon('print')} PDF</button>
@@ -1798,19 +1800,29 @@ function renderScheduleAll(){
   </div>
   ${allWarnings.length?`<div class="alert alert-warn">${icon('warn')} 工時異常：${allWarnings.join('　')}</div>`:''}
   ${schedLegend(false)}
-  ${groupsData.map(g=>{
-    const {warnings:w}=buildSchedTable(g.staff,y,m,false);
-    const shown=showAll?g.staff:g.staff.filter(hasSched);
-    const hiddenN=g.staff.length-shown.length;
-    return `<div class="card" style="padding:16px">
-      <div class="card-title" style="color:${g.color};border-left:4px solid ${g.color};padding-left:10px">
-        <span>${g.name}（${(!showAll&&hiddenN)?`${shown.length} / 共 ${g.staff.length}`:g.staff.length}人）</span>
-        ${(!showAll&&hiddenN)?`<span style="font-size:11px;font-weight:400;color:var(--text2)">${hiddenN} 人本月無班表（已隱藏）</span>`:''}
-      </div>
-      ${w.length?`<div class="alert alert-warn" style="font-size:11px">${icon('warn')} ${w.join('　')}</div>`:''}
-      ${shown.length?shown.map(s=>renderPersonBlock(s,y,m)).join(''):`<div class="alert alert-info" style="font-size:12px">${icon('info')} 本組本月尚無排班人員。</div>`}
-    </div>`;
-  }).join('')}`;
+  ${(()=>{
+    let sections;
+    if(sortMode==='store'){
+      sections=STATE.stores.map(st=>({name:st.name,color:'var(--accent)',staff:allStaff.filter(s=>getAssignedStores(s.id)[0]===st.id)})).filter(sec=>sec.staff.length>0);
+      const noStore=allStaff.filter(s=>!getAssignedStores(s.id).length);
+      if(noStore.length) sections.push({name:'未指派店家',color:'var(--text2)',staff:noStore});
+    } else {
+      sections=groupsData;
+    }
+    return sections.map(g=>{
+      const {warnings:w}=buildSchedTable(g.staff,y,m,false);
+      const shown=showAll?g.staff:g.staff.filter(hasSched);
+      const hiddenN=g.staff.length-shown.length;
+      return `<div class="card" style="padding:16px">
+        <div class="card-title" style="color:${g.color};border-left:4px solid ${g.color};padding-left:10px">
+          <span>${g.name}（${(!showAll&&hiddenN)?`${shown.length} / 共 ${g.staff.length}`:g.staff.length}人）</span>
+          ${(!showAll&&hiddenN)?`<span style="font-size:11px;font-weight:400;color:var(--text2)">${hiddenN} 人本月無班表（已隱藏）</span>`:''}
+        </div>
+        ${w.length?`<div class="alert alert-warn" style="font-size:11px">${icon('warn')} ${w.join('　')}</div>`:''}
+        ${shown.length?shown.map(s=>renderPersonBlock(s,y,m)).join(''):`<div class="alert alert-info" style="font-size:12px">${icon('info')} 本${sortMode==='store'?'店':'組'}本月尚無排班人員。</div>`}
+      </div>`;
+    }).join('');
+  })()}`;
 }
 
 // ==================== 店家視角 ====================
@@ -1856,6 +1868,12 @@ function renderStoreView(){
   const staffAtStore=STATE.staff.filter(s=>
     Object.values(ms[s.id]||{}).some(c=>c&&c.type==='work'&&c.storeId===store.id)
   );
+  // 主別排序：主店（指派清單第一個店）為本店者＝主力排前，其餘＝副手在後
+  staffAtStore.sort((a,b)=>{
+    const aP=getAssignedStores(a.id)[0]===store.id?0:1;
+    const bP=getAssignedStores(b.id)[0]===store.id?0:1;
+    return aP-bP;
+  });
 
   // 日期標題（05-01 格式）
   const dateHeaders=[];
@@ -2004,7 +2022,7 @@ function renderStoreView(){
     }
 
     const roleLabel=notesData['roleLabel']||`王貞文`;
-    const rankLabel=s.role==='leader'?'組長':notesData['rankLabel']||`${si+1}主別：主${si+1}`;
+    const rankLabel=s.role==='leader'?'組長':notesData['rankLabel']||`主別：主${si+1}`;
 
     // 右側統計
     const rightStats=`<td rowspan="2" style="background:#FFF8F0;font-size:10px;padding:4px 6px;vertical-align:top;white-space:nowrap;border:1px solid var(--border)">
@@ -2339,13 +2357,13 @@ function renderStaffView(){
           </td>
         </tr>
         <tr>
-          <td style="font-size:10px;padding:3px 8px">1.主別：主1</td>
+          <td style="font-size:10px;padding:3px 8px">主別：主1</td>
           <td style="font-size:10px;padding:3px 6px;background:var(--surface2);font-weight:600">服勤時間</td>
           ${workRow}
           <td style="background:#EEF8EE;font-size:11px;font-weight:700;padding:3px 6px;text-align:center">${workH}</td>
         </tr>
         <tr>
-          <td style="font-size:10px;padding:3px 8px">排序：</td>
+          <td style="font-size:10px;padding:3px 8px"></td>
           <td style="font-size:10px;padding:3px 6px;background:var(--surface2);font-weight:600">用餐</td>
           ${mealRow}
           <td style="background:#EEF8EE;font-size:11px;font-weight:700;padding:3px 6px;text-align:center">${mealH}</td>
@@ -2360,7 +2378,7 @@ function renderStaffView(){
           </td>
         </tr>
         <tr>
-          <td style="font-size:10px;padding:3px 8px">派員：${store?.staffAlloc||''}</td>
+          <td style="font-size:10px;padding:3px 8px"></td>
           <td style="font-size:10px;padding:3px 6px;background:var(--surface2);font-weight:600">代班</td>
           ${(()=>{
             const svKey=`staffdep_${s.id}_${schedKey(y,m)}`;
@@ -2374,12 +2392,12 @@ function renderStaffView(){
         </tr>
         <tr>
           <td colspan="2" style="font-size:10px;padding:3px 8px;background:#FFFEF0">備註說明</td>
-          ${dCells.map(x=>`<td style="${x.bl}background:#FFFEF0;padding:2px"></td>`).join('')}
+          ${(()=>{const svKey=`staffdep_${s.id}_${schedKey(y,m)}`;const svData=STATE.storeViewNotes?.[svKey]||{};return dCells.map(x=>`<td style="${x.bl}background:#FFFEF0;padding:1px"><input value="${svData[`note_${x.d}`]||''}" style="width:100%;font-size:9px;border:none;background:transparent;text-align:center;padding:1px" onchange="saveStaffDep('${s.id}','${schedKey(y,m)}','note_${x.d}',this.value)"></td>`).join('')})()}
           <td style="background:#FFFEF0"></td>
         </tr>
         <tr>
           <td colspan="2" style="font-size:10px;padding:3px 8px;background:#F5F5F5">AP班</td>
-          ${dCells.map(x=>`<td style="${x.bl}background:#F5F5F5;padding:2px"></td>`).join('')}
+          ${(()=>{const svKey=`staffdep_${s.id}_${schedKey(y,m)}`;const svData=STATE.storeViewNotes?.[svKey]||{};return dCells.map(x=>`<td style="${x.bl}background:#F5F5F5;padding:1px"><input value="${svData[`ap_${x.d}`]||''}" style="width:100%;font-size:9px;border:none;background:transparent;text-align:center;padding:1px" onchange="saveStaffDep('${s.id}','${schedKey(y,m)}','ap_${x.d}',this.value)"></td>`).join('')})()}
           <td style="background:#F5F5F5"></td>
         </tr>
       </tbody>
@@ -4128,7 +4146,7 @@ async function exportExcelFormatted(y,m,gid,opts={}){
 
     // ═══ 列3：服勤時間 ═══
     setCell(0,R,cell('',C.rowSub,font(false,8)));
-    setCell(1,R,cell((si+1)+'.主別：主'+(si+1),C.rowSub,font(false,7.5),'left'));
+    setCell(1,R,cell('主別：主'+(si+1),C.rowSub,font(false,7.5),'left'));
     setCell(2,R,cell('',C.rowSub));
     setCell(3,R,cell('服勤時間',C.rowSub,font(true,7.5),'center'));
     let rowWorkTotal=0;
@@ -4272,6 +4290,7 @@ function exportStoreViewExcel(storeId,y,m){
   if(!store){alert('找不到店家');return}
   const staffList=STATE.staff.filter(s=>getAssignedStores(s.id).includes(storeId));
   if(!staffList.length){alert('此店尚無指派人員');return}
+  staffList.sort((a,b)=>((getAssignedStores(a.id)[0]===storeId?0:1)-(getAssignedStores(b.id)[0]===storeId?0:1)));
   exportExcelFormatted(y,m,null,{staffList,fixedStore:store,fileLabel:store.name.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'')+'_店家視角'});
 }
 function exportStaffViewExcel(staffId,y,m){
