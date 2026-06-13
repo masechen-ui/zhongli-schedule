@@ -2250,7 +2250,7 @@ function renderStaffView(){
     dCells.push({d,dow,bg,bl,code,shiftCls,stName,startTime,c,pid:pidx});
   }
 
-  const dateRow=dCells.map(x=>`<th style="min-width:28px;font-size:10px;background:${x.bg};${x.bl}">${x.d}<br><span style="font-size:9px">${DAY_NAMES[x.dow]}</span></th>`).join('');
+  const dateRow=dCells.map(x=>`<th style="min-width:26px;font-size:9px;background:${x.bg};${x.bl}padding:2px 1px;text-align:center">${m.toString().padStart(2,'0')}-${x.d.toString().padStart(2,'0')}</th>`).join('');
   const shiftRow=dCells.map(x=>`<td class="${x.shiftCls}" onclick="openCellEdit('${s.id}',${x.d},${y},${m},'staff-view')" title="點擊修改班別" style="${x.bl}cursor:pointer;text-align:center;font-size:11px;font-weight:700;padding:2px">${x.code}</td>`).join('');
   const workRow=dCells.map(x=>{
     if(x.c?.type==='work'){const stxa=STATE.stores.find(q=>q.id===x.c.storeId);const dwxa=getDOW(y,m,x.d);const ha=getCellWorkH(x.c,stxa,dwxa);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${ha}</td>`;}
