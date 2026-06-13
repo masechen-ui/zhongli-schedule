@@ -12,40 +12,57 @@
   --danger:#C0392B; --success:#27AE60; --warn:#E67E22; --info:#2980B9;
   --shift-off:#EDE8E3; --shift-leave:#F7D9D0; --shift-meeting:#E8D8F0; --shift-work:#D4E8D0;
   --shift-a:#D4E8D0; --shift-p:#D0E0F8; --shift-o:#FFE4B5; --shift-b:#FDE8F5; --shift-c:#E8F4E8;
+  /* 圓角尺度（統一） */
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-pill:999px;
+  /* 染色陰影（用暖色相，非純黑） */
+  --sh-sm:0 1px 2px rgba(44,36,32,.05), 0 1px 1px rgba(44,36,32,.04);
+  --sh-md:0 2px 6px rgba(44,36,32,.06), 0 6px 16px rgba(44,36,32,.07);
+  --sh-lg:0 10px 34px rgba(44,36,32,.14);
+  --accent-soft:#F0E7DF;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
-header{background:var(--text);color:#FFF;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-header h1{font-size:16px;font-weight:500;letter-spacing:.5px}
+header{background:var(--text);color:#FFF;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(44,36,32,.18)}
+header h1{font-size:16px;font-weight:500;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
 header h1 span{color:var(--accent2);font-weight:700}
+header h1 svg{width:18px;height:18px;color:var(--accent2)}
 .header-actions{display:flex;gap:8px}
-.btn{padding:6px 14px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
-.btn-primary{background:var(--accent);color:#FFF}.btn-primary:hover{background:#7A5E4E}
-.btn-ghost{background:transparent;color:#FFF;border:1px solid rgba(255,255,255,.3)}.btn-ghost:hover{background:rgba(255,255,255,.1)}
-.btn-sm{padding:4px 10px;font-size:12px}
-.btn-danger{background:var(--danger);color:#FFF}
-.btn-success{background:var(--success);color:#FFF}
-.btn-warn{background:var(--warn);color:#FFF}
-.btn-info{background:var(--info);color:#FFF}
-.btn-outline{background:#FFF;color:var(--text);border:1px solid var(--border)}.btn-outline:hover{background:var(--surface2)}
-.btn-purple{background:#7D3C98;color:#FFF}
+.btn{padding:7px 15px;border-radius:var(--r-sm);border:1px solid transparent;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;line-height:1.2;white-space:nowrap;transition:transform .08s ease,background .15s,box-shadow .15s,border-color .15s,filter .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:active{transform:translateY(1px)}
+.btn svg{width:15px;height:15px;flex-shrink:0}
+.btn-sm svg{width:14px;height:14px}
+.btn-primary{background:var(--accent);color:#FFF;box-shadow:var(--sh-sm)}.btn-primary:hover{background:#7A5E4E}
+.btn-ghost{background:transparent;color:#FFF;border-color:rgba(255,255,255,.28)}.btn-ghost:hover{background:rgba(255,255,255,.12)}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn-danger{background:var(--danger);color:#FFF}.btn-danger:hover{filter:brightness(.94)}
+.btn-success{background:var(--success);color:#FFF}.btn-success:hover{filter:brightness(.94)}
+.btn-warn{background:var(--warn);color:#FFF}.btn-warn:hover{filter:brightness(.94)}
+.btn-info{background:var(--info);color:#FFF}.btn-info:hover{filter:brightness(.94)}
+.btn-outline{background:#FFF;color:var(--text);border-color:var(--border)}.btn-outline:hover{background:var(--surface2);border-color:var(--accent2)}
+.btn-purple{background:#8A5A72;color:#FFF}.btn-purple:hover{filter:brightness(.94)}
 .app{display:flex;height:calc(100vh - 52px)}
 nav{width:200px;background:var(--surface);border-right:1px solid var(--border);padding:16px 0;flex-shrink:0;overflow-y:auto}
 .nav-label{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;padding:4px 20px 6px}
-.nav-item{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;margin:1px 8px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;color:var(--text2);transition:background .15s,color .15s,box-shadow .15s;margin:1px 8px}
 .nav-item:hover{background:var(--surface2);color:var(--text)}
-.nav-item.active{background:var(--accent);color:#FFF}
+.nav-item.active{background:var(--accent);color:#FFF;box-shadow:var(--sh-sm)}
 .nav-item .icon{font-size:16px;width:20px;text-align:center}
+.nav-item svg{width:17px;height:17px;flex-shrink:0;opacity:.82}
+.nav-item.active svg{opacity:1}
 main{flex:1;overflow-y:auto;padding:24px;background:var(--bg)}
 .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.page-title{font-size:20px;font-weight:700}
+.page-title{font-size:20px;font-weight:700;display:flex;align-items:center;gap:7px}
+.page-title svg{width:20px;height:20px;flex-shrink:0;color:var(--accent)}
+.alert svg{width:15px;height:15px;flex-shrink:0;margin-top:1px}
 .page-sub{font-size:13px;color:var(--text2);margin-top:2px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px;margin-bottom:16px;box-shadow:var(--sh-sm)}
 .card-title{font-size:14px;font-weight:700;color:var(--text2);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
-.stat-val{font-size:28px;font-weight:700;color:var(--accent)}
-.stat-label{font-size:11px;color:var(--text2);margin-top:3px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 16px;text-align:center;box-shadow:var(--sh-sm);position:relative;overflow:hidden;transition:transform .12s ease,box-shadow .12s}
+.stat-card::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.stat-card:hover{transform:translateY(-2px);box-shadow:var(--sh-md)}
+.stat-val{font-size:28px;font-weight:700;color:var(--accent);letter-spacing:-.5px}
+.stat-label{font-size:11px;color:var(--text2);margin-top:4px;letter-spacing:.3px;font-weight:500}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:var(--surface2);padding:8px 10px;text-align:left;font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap}
@@ -76,8 +93,8 @@ tr:hover td{background:var(--surface2)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-group{display:flex;flex-direction:column;gap:4px}
 .form-group label{font-size:12px;font-weight:600;color:var(--text2)}
-input,select,textarea{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:#FFF;transition:border-color .15s}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+input,select,textarea{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#FFF;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,111,94,.12)}
 .form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
 .badge-leader{background:#F9E4B7;color:#B7770D}
@@ -97,14 +114,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .alert-danger{background:#FDECEA;border:1px solid #F1948A;color:#7B241C}
 .alert-success{background:#EAFAF1;border:1px solid #82E0AA;color:#196F3D}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200}
-.modal{background:var(--surface);border-radius:12px;padding:24px;width:520px;max-width:92vw;max-height:88vh;overflow-y:auto}
+.modal{background:var(--surface);border-radius:var(--r-lg);padding:24px;width:520px;max-width:92vw;max-height:88vh;overflow-y:auto;box-shadow:var(--sh-lg)}
 .modal-title{font-size:16px;font-weight:700;margin-bottom:16px}
 .month-nav{display:flex;align-items:center;gap:12px;margin-bottom:16px}
 .month-label{font-size:16px;font-weight:700;min-width:100px;text-align:center}
 .assign-tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;background:#EAF4FB;color:#1A5276;margin:1px}
 .history-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
-.history-card{border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;transition:all .15s}
-.history-card:hover{border-color:var(--accent);background:var(--surface2)}
+.history-card{border:1px solid var(--border);border-radius:var(--r-md);padding:10px;cursor:pointer;text-align:center;transition:transform .12s,border-color .15s,box-shadow .15s;box-shadow:var(--sh-sm)}
+.history-card:hover{border-color:var(--accent);background:var(--surface2);transform:translateY(-2px);box-shadow:var(--sh-md)}
 .history-card.has-data{border-color:var(--accent2);background:#FFFAF5}
 .history-card .hc-month{font-size:16px;font-weight:700}
 .history-card .hc-label{font-size:11px;color:var(--text2);margin-top:2px}
@@ -311,29 +328,29 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>🗓 <span>中壢課</span> 自動排班系統</h1>
+  <h1><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="M8 13.5h2.5M13.5 13.5H16M8 17h2.5"/></svg><span>中壢課</span> 自動排班系統</h1>
   <div class="header-actions">
-    <span id="save-status" style="font-size:11px;color:rgba(255,255,255,0.5)"></span>
-    <button class="btn btn-ghost btn-sm" onclick="exportExcel()">⬇ Excel</button>
-    <button class="btn btn-ghost btn-sm" onclick="exportPDF()">⬇ PDF</button>
+    <span id="save-status" style="font-size:11px;color:rgba(255,255,255,0.72)"></span>
+    <button class="btn btn-ghost btn-sm" onclick="exportExcel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg> Excel</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportPDF()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8V3h10v5"/><rect x="4" y="8" width="16" height="8" rx="1.5"/><path d="M7 14h10v6H7z"/><circle cx="17" cy="11" r=".7"/></svg> PDF</button>
   </div>
 </header>
 <div class="app">
   <nav>
     <div class="nav-label" style="margin-top:8px">班表</div>
-    <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard"><span class="icon">📊</span>概覽</div>
+    <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.2"/><rect x="14" y="3" width="7" height="5" rx="1.2"/><rect x="14" y="12" width="7" height="9" rx="1.2"/><rect x="3" y="16" width="7" height="5" rx="1.2"/></svg>概覽</div>
     <div id="nav-group-items"><!-- 動態產生 --></div>
-    <div class="nav-item" onclick="showPage('schedule-all')" id="nav-schedule-all"><span class="icon">📋</span>中壢課總表</div>
-    <div class="nav-item" onclick="showPage('store-view')" id="nav-store-view"><span class="icon">🏪</span>店家視角</div>
-    <div class="nav-item" onclick="showPage('staff-view')" id="nav-staff-view"><span class="icon">👤</span>人員視角</div>
-    <div class="nav-item" onclick="showPage('history')" id="nav-history"><span class="icon">🗂</span>歷月班表</div>
+    <div class="nav-item" onclick="showPage('schedule-all')" id="nav-schedule-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3.5"/></svg>中壢課總表</div>
+    <div class="nav-item" onclick="showPage('store-view')" id="nav-store-view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l1.2-4.6A1 1 0 0 1 5.2 4h13.6a1 1 0 0 1 .97.74L21 9"/><path d="M4.5 9v10a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V9"/><path d="M9 20.5v-5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5"/></svg>店家視角</div>
+    <div class="nav-item" onclick="showPage('staff-view')" id="nav-staff-view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>人員視角</div>
+    <div class="nav-item" onclick="showPage('history')" id="nav-history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>歷月班表</div>
     <div class="nav-label" style="margin-top:12px">設定</div>
-    <div class="nav-item" onclick="showPage('staff')" id="nav-staff"><span class="icon">👥</span>人員管理</div>
-    <div class="nav-item" onclick="showPage('stores')" id="nav-stores"><span class="icon">🏪</span>店家管理</div>
-    <div class="nav-item" onclick="showPage('groups')" id="nav-groups"><span class="icon">🏷</span>組別管理</div>
-    <div class="nav-item" onclick="showPage('assign')" id="nav-assign"><span class="icon">🔗</span>人員指派</div>
-    <div class="nav-item" onclick="showPage('special')" id="nav-special"><span class="icon">📌</span>特殊安排</div>
-    <div class="nav-item" onclick="showPage('settings')" id="nav-settings"><span class="icon">⚙️</span>系統設定</div>
+    <div class="nav-item" onclick="showPage('staff')" id="nav-staff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19a6 6 0 0 1 12 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M17 13.4A6 6 0 0 1 21 19"/></svg>人員管理</div>
+    <div class="nav-item" onclick="showPage('stores')" id="nav-stores"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l1.2-4.6A1 1 0 0 1 5.2 4h13.6a1 1 0 0 1 .97.74L21 9"/><path d="M4.5 9v10a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V9"/><path d="M9 20.5v-5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5"/></svg>店家管理</div>
+    <div class="nav-item" onclick="showPage('groups')" id="nav-groups"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 3H5a2 2 0 0 0-2 2v6l9 9 8-8-9-9z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>組別管理</div>
+    <div class="nav-item" onclick="showPage('assign')" id="nav-assign"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.5 1.5"/><path d="M14 11a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.5-1.5"/></svg>人員指派</div>
+    <div class="nav-item" onclick="showPage('special')" id="nav-special"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16.5V22"/><path d="M9 2.5h6l-1 6 3 3v2.5H7V11.5l3-3-1-6z"/></svg>特殊安排</div>
+    <div class="nav-item" onclick="showPage('settings')" id="nav-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3"/></svg>系統設定</div>
   </nav>
   <main id="main-content"></main>
 </div>
@@ -349,6 +366,50 @@ const CHANNEL_LIST=[{value:'dept',label:'百貨'},{value:'counter',label:'專櫃
 const CHANNEL_NAMES={dept:'百貨',counter:'專櫃',outlet:'OUTLET',shop:'專門店',wholesale:'量販店',sale:'特賣會',popup:'臨時店點',office:'辦公室'};
 const STAFF_ALLOC_LIST=[0.5,1,1.5,2,2.5,3,3.5,4,5];
 const CELL_TYPES=['work','off','leave','meeting','training'];
+
+// ==================== 圖示系統（統一 SVG，取代 emoji）====================
+const ICON_PATHS={
+  'dashboard':'<rect x="3" y="3" width="7" height="9" rx="1.2"/><rect x="14" y="3" width="7" height="5" rx="1.2"/><rect x="14" y="12" width="7" height="9" rx="1.2"/><rect x="3" y="16" width="7" height="5" rx="1.2"/>',
+  'calendar':'<rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
+  'clipboard':'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3.5"/>',
+  'store':'<path d="M3 9l1.2-4.6A1 1 0 0 1 5.2 4h13.6a1 1 0 0 1 .97.74L21 9"/><path d="M4.5 9v10a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V9"/><path d="M9 20.5v-5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5"/>',
+  'user':'<circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/>',
+  'users':'<circle cx="9" cy="8" r="3.2"/><path d="M3 19a6 6 0 0 1 12 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M17 13.4A6 6 0 0 1 21 19"/>',
+  'archive':'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
+  'tag':'<path d="M11 3H5a2 2 0 0 0-2 2v6l9 9 8-8-9-9z"/><circle cx="7.5" cy="7.5" r="1.3"/>',
+  'link':'<path d="M10 13a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.5 1.5"/><path d="M14 11a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.5-1.5"/>',
+  'pin':'<path d="M12 16.5V22"/><path d="M9 2.5h6l-1 6 3 3v2.5H7V11.5l3-3-1-6z"/>',
+  'settings':'<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3"/>',
+  'download':'<path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/>',
+  'upload':'<path d="M12 21V9"/><path d="M7 13l5-5 5 5"/><path d="M4 4h16"/>',
+  'cloud':'<path d="M17.5 19a4.5 4.5 0 0 0 .2-9A6 6 0 0 0 6 9.5 4 4 0 0 0 6.5 19h11z"/>',
+  'cloud-refresh':'<path d="M17.5 18a4.5 4.5 0 0 0 .2-9A6 6 0 0 0 6 9.5 4 4 0 0 0 6.5 18"/><path d="M9 20.5a3 3 0 1 0 .6-3.4M9 14.5v2.5h2.5"/>',
+  'trash':'<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6.5 7l1 13h9l1-13"/><path d="M10 11v6M14 11v6"/>',
+  'edit':'<path d="M15.5 3.5l5 5"/><path d="M4 20l1-4L17 4l3 3L8 19l-4 1z"/>',
+  'print':'<path d="M7 8V3h10v5"/><rect x="4" y="8" width="16" height="8" rx="1.5"/><path d="M7 14h10v6H7z"/><circle cx="17" cy="11" r=".7"/>',
+  'lock':'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  'plus':'<path d="M12 5v14M5 12h14"/>',
+  'save':'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7"/><path d="M8 13h8v5H8z"/>',
+  'warn':'<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>',
+  'check':'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+  'bulb':'<path d="M9.5 18h5"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.6.7 1 1.5 1 2.5h6c0-1 .4-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
+  'eye':'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  'clock':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  'ban':'<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+  'star':'<path d="M12 3l2.7 5.5 6 .9-4.4 4.2 1 6L12 17l-5.3 2.6 1-6L3.3 9.4l6-.9z"/>',
+  'doc':'<path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4"/><path d="M9 13h6M9 17h6"/>',
+  'arrow-left':'<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  'bolt':'<path d="M13 2L5 13h5l-1 9 9-12h-5l1-8z"/>',
+  'info':'<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.6" r=".6"/>',
+  'wand':'<path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M18 14l.7 1.6L20 16l-1.3.7L18 18l-.7-1.3L16 16l1.3-.4z"/>',
+  'calendar-logo':'<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="M8 13.5h2.5M13.5 13.5H16M8 17h2.5"/>'
+};
+function icon(name,size){
+  const p=ICON_PATHS[name]; if(!p) return '';
+  const st=size?` style="width:${size}px;height:${size}px"`:'';
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"${st} aria-hidden="true">${p}</svg>`;
+}
+window.icon=icon;
 
 // ==================== 狀態 ====================
 window.STATE={
@@ -1335,7 +1396,7 @@ function renderNavGroups(){
     <div class="nav-item ${currentPage==='schedule-'+g.id?'active':''}"
       onclick="showPage('schedule-${g.id}')" id="nav-schedule-${g.id}"
       style="${currentPage==='schedule-'+g.id?'':''}">
-      <span class="icon">📅</span>${g.name}班表
+      ${icon('calendar')}${g.name}班表
     </div>`).join('');
 }
 // ==================== 頁面路由 ====================
@@ -1387,7 +1448,7 @@ function renderDashboard(){
 
   return `
   <div class="page-header">
-    <div><div class="page-title">📊 概覽</div><div class="page-sub">${y}年${m}月 · 中壢課排班系統</div></div>
+    <div><div class="page-title">${icon('dashboard')}概覽</div><div class="page-sub">${y}年${m}月 · 中壢課排班系統</div></div>
   </div>
   <div class="stats-row">
     <div class="stat-card"><div class="stat-val">${STATE.staff.filter(s=>!s.status||s.status==='active').length}</div><div class="stat-label">在班人員</div></div>
@@ -1398,11 +1459,11 @@ function renderDashboard(){
   <div class="card">
     <div class="card-title">⚡ 快速操作</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      ${getAllGroups().map(g=>`<button class="btn btn-primary" onclick="showPage('schedule-${g.id}')" style="border-left:3px solid ${g.color}">📅 ${g.name}班表</button>`).join('')}
-      <button class="btn btn-outline" onclick="showPage('schedule-all')">📋 中壢課總表</button>
-      <button class="btn btn-purple" onclick="showPage('assign')">🔗 人員指派</button>
-      <button class="btn btn-info" onclick="showPage('special')">📌 特殊安排</button>
-      <button class="btn btn-outline" onclick="showPage('history')">🗂 歷月班表</button>
+      ${getAllGroups().map(g=>`<button class="btn btn-primary" onclick="showPage('schedule-${g.id}')" style="border-left:3px solid ${g.color}">${icon('calendar')} ${g.name}班表</button>`).join('')}
+      <button class="btn btn-outline" onclick="showPage('schedule-all')">${icon('clipboard')} 中壢課總表</button>
+      <button class="btn btn-purple" onclick="showPage('assign')">${icon('link')} 人員指派</button>
+      <button class="btn btn-info" onclick="showPage('special')">${icon('pin')} 特殊安排</button>
+      <button class="btn btn-outline" onclick="showPage('history')">${icon('archive')} 歷月班表</button>
     </div>
   </div>
 
@@ -1579,11 +1640,11 @@ function renderScheduleGroup(gid){
 
   if(!hasData) return `
     <div class="page-header">
-      <div><div class="page-title" style="color:${groupColor}">📅 ${groupLabel} 排班作業</div><div class="page-sub">${y}年${m}月</div></div>
+      <div><div class="page-title" style="color:${groupColor}">${icon('calendar')}${groupLabel} 排班作業</div><div class="page-sub">${y}年${m}月</div></div>
     </div>
     ${nav}
-    <div class="alert alert-info">ℹ️ 本月尚未排班，請執行「自動排班」。</div>
-    <button class="btn btn-success" onclick="runAutoScheduleGroup('${gid}')">✨ ${groupLabel} 自動排班</button>`;
+    <div class="alert alert-info">${icon('info')} 本月尚未排班，請執行「自動排班」。</div>
+    <button class="btn btn-success" onclick="runAutoScheduleGroup('${gid}')">${icon('wand')} ${groupLabel} 自動排班</button>`;
 
   const {dHeaders,rows,warnings,periods}=buildSchedTable(staffList,y,m,true);
 
@@ -1620,21 +1681,21 @@ function renderScheduleGroup(gid){
   return `
   <div class="page-header">
     <div>
-      <div class="page-title" style="color:${groupColor}">📅 ${groupLabel} 排班作業</div>
+      <div class="page-title" style="color:${groupColor}">${icon('calendar')}${groupLabel} 排班作業</div>
       <div class="page-sub">${y}年${m}月</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-success" onclick="runAutoScheduleGroup('${gid}')">✨ 重新自動排班</button>
-      <button class="btn btn-primary" onclick="showPage('store-view')">🏪 看店家視角</button>
-      <button class="btn btn-primary" onclick="showPage('staff-view')">👤 看人員視角</button>
-      <button class="btn btn-outline" onclick="exportExcelGroup('${gid}')">⬇ Excel</button>
+      <button class="btn btn-success" onclick="runAutoScheduleGroup('${gid}')">${icon('wand')} 重新自動排班</button>
+      <button class="btn btn-primary" onclick="showPage('store-view')">${icon('store')} 看店家視角</button>
+      <button class="btn btn-primary" onclick="showPage('staff-view')">${icon('user')} 看人員視角</button>
+      <button class="btn btn-outline" onclick="exportExcelGroup('${gid}')">${icon('download')} Excel</button>
     </div>
   </div>
   ${nav}
 
-  ${warnings.length?`<div class="alert alert-warn">⚠️ 人員工時異常：${warnings.join('　')}</div>`:''}
-  ${overStores.length?`<div class="alert alert-danger">🚫 店時數超標：${overStores.map(x=>`${x.store.name}（${x.actual}h / 上限${x.limit}h）`).join('　')}</div>`:''}
-  ${underStores.length?`<div class="alert alert-warn">⚠️ 店時數不足：${underStores.map(x=>`${x.store.name}（${x.actual}h / 目標${x.limit}h，${x.pct}%）`).join('　')}</div>`:''}
+  ${warnings.length?`<div class="alert alert-warn">${icon('warn')} 人員工時異常：${warnings.join('　')}</div>`:''}
+  ${overStores.length?`<div class="alert alert-danger">${icon('ban')} 店時數超標：${overStores.map(x=>`${x.store.name}（${x.actual}h / 上限${x.limit}h）`).join('　')}</div>`:''}
+  ${underStores.length?`<div class="alert alert-warn">${icon('warn')} 店時數不足：${underStores.map(x=>`${x.store.name}（${x.actual}h / 目標${x.limit}h，${x.pct}%）`).join('　')}</div>`:''}
 
   <div class="card" style="padding:12px;margin-bottom:12px">
     <div class="card-title" style="margin-bottom:8px">📊 雙週工時達標狀況</div>
@@ -1659,7 +1720,7 @@ function renderScheduleGroup(gid){
       📋 展開班表格（可點格子手動調整）
     </summary>
     <div style="margin-top:8px">
-      <div class="alert alert-info" style="font-size:11px">💡 主要調整請在「店家視角」或「人員視角」直接操作，更直覺。此處班表格可作快速確認用。</div>
+      <div class="alert alert-info" style="font-size:11px">${icon('bulb')} 主要調整請在「店家視角」或「人員視角」直接操作，更直覺。此處班表格可作快速確認用。</div>
       ${schedLegend(true)}
       <div style="overflow-x:auto">
         <table class="sg">
@@ -1678,6 +1739,8 @@ function renderScheduleAll(){
   const nav=monthNav(`changeMonthAll(-1)`,`changeMonthAll(1)`,y,m);
   const allStaff=STATE.staff;
   const hasData=allStaff.some(s=>Object.keys(ms[s.id]||{}).length>0);
+  const showAll=!!STATE._scheduleAllShowAll;          // 預設 false＝只顯示有班表的人
+  const hasSched=(s)=>Object.keys(ms[s.id]||{}).length>0;
 
   // 組長工時統計
   // 動態取得所有組別
@@ -1691,12 +1754,12 @@ function renderScheduleAll(){
 
   if(!hasData) return `
     <div class="page-header">
-      <div><div class="page-title">📋 中壢課總表</div><div class="page-sub">${y}年${m}月 · 統合唯讀</div></div>
+      <div><div class="page-title">${icon('clipboard')}中壢課總表</div><div class="page-sub">${y}年${m}月 · 統合唯讀</div></div>
     </div>
     ${nav}
-    <div class="alert alert-info">ℹ️ 尚無班表資料。請先至各組班表頁面執行自動排班。</div>
+    <div class="alert alert-info">${icon('info')} 尚無班表資料。請先至各組班表頁面執行自動排班。</div>
     <div style="display:flex;gap:10px">
-      ${getAllGroups().map(g=>`<button class="btn btn-primary" onclick="showPage('schedule-${g.id}')">📅 去${g.name}排班</button>`).join('')}
+      ${getAllGroups().map(g=>`<button class="btn btn-primary" onclick="showPage('schedule-${g.id}')">${icon('calendar')} 去${g.name}排班</button>`).join('')}
     </div>`;
 
   // 分組建表
@@ -1708,12 +1771,13 @@ function renderScheduleAll(){
   return `
   <div class="page-header">
     <div>
-      <div class="page-title">📋 中壢課總表</div>
+      <div class="page-title">${icon('clipboard')}中壢課總表</div>
       <div class="page-sub">${y}年${m}月 · 統合唯讀 · ${groupsData.map(g=>`${g.name}${g.staff.length}人`).join(' / ')}</div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-outline" onclick="exportExcelAll()">⬇ Excel（全員）</button>
-      <button class="btn btn-outline" onclick="window.print()">⬇ PDF</button>
+      <button class="btn ${showAll?'btn-primary':'btn-outline'}" onclick="STATE._scheduleAllShowAll=!STATE._scheduleAllShowAll;showPage('schedule-all')">${icon(showAll?'user':'users')} ${showAll?'只顯示有班表':'顯示全部人員'}</button>
+      <button class="btn btn-outline" onclick="exportExcelAll()">${icon('download')} Excel（全員）</button>
+      <button class="btn btn-outline" onclick="window.print()">${icon('print')} PDF</button>
     </div>
   </div>
   ${nav}
@@ -1730,19 +1794,19 @@ function renderScheduleAll(){
       <div style="font-size:11px;color:var(--text2)">${allStaff.length}人 · 目標${allStaff.length*80}h</div>
     </div>
   </div>
-  ${allWarnings.length?`<div class="alert alert-warn">⚠️ 工時異常：${allWarnings.join('　')}</div>`:''}
+  ${allWarnings.length?`<div class="alert alert-warn">${icon('warn')} 工時異常：${allWarnings.join('　')}</div>`:''}
   ${schedLegend(false)}
   ${groupsData.map(g=>{
-    const {dHeaders:dh,rows,warnings:w}=buildSchedTable(g.staff,y,m,false);
-    return `<div class="card" style="padding:12px">
-      <div class="card-title" style="color:${g.color};border-left:4px solid ${g.color};padding-left:10px">${g.name}（${g.staff.length}人）</div>
-      ${w.length?`<div class="alert alert-warn" style="font-size:11px">⚠ ${w.join('　')}</div>`:''}
-      <div style="overflow-x:auto">
-        <table class="sg">
-          <thead><tr><th class="col-name">姓名</th>${dh.join('')}<th class="col-hours">工時</th></tr></thead>
-          <tbody>${rows.join('')}</tbody>
-        </table>
+    const {warnings:w}=buildSchedTable(g.staff,y,m,false);
+    const shown=showAll?g.staff:g.staff.filter(hasSched);
+    const hiddenN=g.staff.length-shown.length;
+    return `<div class="card" style="padding:16px">
+      <div class="card-title" style="color:${g.color};border-left:4px solid ${g.color};padding-left:10px">
+        <span>${g.name}（${(!showAll&&hiddenN)?`${shown.length} / 共 ${g.staff.length}`:g.staff.length}人）</span>
+        ${(!showAll&&hiddenN)?`<span style="font-size:11px;font-weight:400;color:var(--text2)">${hiddenN} 人本月無班表（已隱藏）</span>`:''}
       </div>
+      ${w.length?`<div class="alert alert-warn" style="font-size:11px">${icon('warn')} ${w.join('　')}</div>`:''}
+      ${shown.length?shown.map(s=>renderPersonBlock(s,y,m)).join(''):`<div class="alert alert-info" style="font-size:12px">${icon('info')} 本組本月尚無排班人員。</div>`}
     </div>`;
   }).join('')}`;
 }
@@ -1776,15 +1840,15 @@ function renderStoreView(){
     ${storeOptions.map(st=>`<option value="${st.id}" ${st.id===selId?'selected':''}>${st.isTemp?'⚡':''}${st.storeNo} ${st.name}（${CHANNEL_NAMES[st.channel]||''}）派員${st.staffAlloc}</option>`).join('')}
   </select>`;
 
-  if(!store) return `<div class="page-header"><div><div class="page-title">🏪 店家視角</div></div></div>${nav}<div class="alert alert-info">請選擇店家</div>`;
+  if(!store) return `<div class="page-header"><div><div class="page-title">${icon('store')}店家視角</div></div></div>${nav}<div class="alert alert-info">請選擇店家</div>`;
 
   const hasData=STATE.staff.some(s=>Object.keys(ms[s.id]||{}).length>0);
   if(!hasData) return `
     <div class="page-header">
-      <div><div class="page-title">🏪 店家視角</div></div>
+      <div><div class="page-title">${icon('store')}店家視角</div></div>
       <div style="display:flex;gap:8px;align-items:center">${selectHtml}</div>
     </div>
-    ${nav}<div class="alert alert-info">ℹ️ 尚無班表資料，請先執行自動排班。</div>`;
+    ${nav}<div class="alert alert-info">${icon('info')} 尚無班表資料，請先執行自動排班。</div>`;
 
   // 找出在此店有班的員工
   const staffAtStore=STATE.staff.filter(s=>
@@ -2031,7 +2095,7 @@ function renderStoreView(){
   if(staffAtStore.length===0){
     return `
       <div class="page-header">
-        <div><div class="page-title">🏪 店家視角</div><div class="page-sub">${y}年${m}月</div></div>
+        <div><div class="page-title">${icon('store')}店家視角</div><div class="page-sub">${y}年${m}月</div></div>
         <div style="display:flex;gap:8px;align-items:center">${selectHtml}</div>
       </div>
       ${nav}
@@ -2048,10 +2112,10 @@ function renderStoreView(){
 
   return `
   <div class="page-header">
-    <div><div class="page-title">🏪 店家視角</div><div class="page-sub">${y}年${m}月 · 每人獨立區塊</div></div>
+    <div><div class="page-title">${icon('store')}店家視角</div><div class="page-sub">${y}年${m}月 · 每人獨立區塊</div></div>
     <div style="display:flex;gap:8px;align-items:center">
       ${selectHtml}
-      <button class="btn btn-outline btn-sm" onclick="exportStoreViewExcel('${store.id}',${y},${m})">⬇ Excel</button>
+      <button class="btn btn-outline btn-sm" onclick="exportStoreViewExcel('${store.id}',${y},${m})">${icon('download')} Excel</button>
     </div>
   </div>
   ${nav}
@@ -2073,7 +2137,7 @@ function renderStoreView(){
     </div>
   </div>
 
-  <div class="alert alert-info" style="font-size:11px">✏️ <strong>班別格可直接點擊修改</strong>（儲存後留在本頁）　代班、支援、備註說明、AP班欄位可直接點格子輸入，即時儲存。</div>
+  <div class="alert alert-info" style="font-size:11px">${icon('edit')} <strong>班別格可直接點擊修改</strong>（儲存後留在本頁）　代班、支援、備註說明、AP班欄位可直接點格子輸入，即時儲存。</div>
 
   ${staffBlocks.join('')}`;
 }
@@ -2143,7 +2207,7 @@ function renderStaffView(){
     ${staffOptions.map(x=>`<option value="${x.id}" ${x.id===selId?'selected':''}>${x.empNo} ${x.name}${x.status&&x.status!=='active'?' ['+({sick:'病假',parental:'育嬰假',excluded:'排除',resigned:'離職'}[x.status]||x.status)+']':''}</option>`).join('')}
   </select>`;
 
-  if(!s) return `<div class="page-header"><div><div class="page-title">👤 人員視角</div></div></div>${nav}<div class="alert alert-info">請選擇人員</div>`;
+  if(!s) return `<div class="page-header"><div><div class="page-title">${icon('user')}人員視角</div></div></div>${nav}<div class="alert alert-info">請選擇人員</div>`;
 
   const sd=ms[s.id]||{};
   const store=STATE.stores.find(x=>getAssignedStores(s.id).includes(x.id));
@@ -2206,11 +2270,11 @@ function renderStaffView(){
 
   return `
   <div class="page-header">
-    <div><div class="page-title">👤 人員視角</div><div class="page-sub">${y}年${m}月</div></div>
+    <div><div class="page-title">${icon('user')}人員視角</div><div class="page-sub">${y}年${m}月</div></div>
     <div style="display:flex;gap:8px;align-items:center">
       ${selectHtml}
-      <button class="btn btn-outline btn-sm" onclick="exportStaffViewExcel('${selId}',${y},${m})">⬇ Excel</button>
-      <button class="btn btn-outline btn-sm" onclick="showPage('staff-view');setTimeout(()=>window.print(),200)">🖨 列印</button>
+      <button class="btn btn-outline btn-sm" onclick="exportStaffViewExcel('${selId}',${y},${m})">${icon('download')} Excel</button>
+      <button class="btn btn-outline btn-sm" onclick="showPage('staff-view');setTimeout(()=>window.print(),200)">${icon('print')} 列印</button>
     </div>
   </div>
   ${nav}
@@ -2235,7 +2299,7 @@ function renderStaffView(){
     <div style="margin-top:6px;font-size:11px;color:var(--text2)">${pHLabel}</div>
   </div>
 
-  <div class="alert alert-info" style="font-size:11px">✏️ <strong>班別格可直接點擊修改</strong>（儲存後留在本頁）</div>
+  <div class="alert alert-info" style="font-size:11px">${icon('edit')} <strong>班別格可直接點擊修改</strong>（儲存後留在本頁）</div>
 
   <div style="overflow-x:auto">
     <table style="border-collapse:collapse;font-size:11px">
@@ -2310,6 +2374,95 @@ function renderStaffView(){
         </tr>
       </tbody>
     </table>
+  </div>`;
+}
+
+// ── 共用：每人豐富區塊（店家視角格式；唯讀，供中壢課總表用）──
+function renderPersonBlock(s, y, m, opts){
+  opts=opts||{};
+  const days=daysInMonth(y,m);
+  const ms=STATE.schedules[schedKey(y,m)]||{};
+  const sd=ms[s.id]||{};
+  const periods=getBiweeklyPeriods(y,m);
+  const stdH=(y===2026&&m===5)?184:(daysInMonth(y,m)===31?184:176);
+  const store=STATE.stores.find(x=>getAssignedStores(s.id).includes(x.id));
+  const noteKey=`${store?store.id:'_'}_${s.id}_${schedKey(y,m)}`;
+  const notesData=STATE.storeViewNotes?.[noteKey]||{};
+
+  let workH=0,mealH=0,workDays=0,offDays=0,leaveDays=0;
+  for(let d=1;d<=days;d++){
+    const c=sd[d];
+    if(!c||c.type==='off') offDays++;
+    else if(c.type==='leave') leaveDays++;
+    else if(c.type==='work'){
+      const stx=STATE.stores.find(q=>q.id===c.storeId); const dw=getDOW(y,m,d);
+      workDays++; workH+=getCellWorkH(c,stx,dw); mealH+=getCellMealH(c,stx,dw);
+    }
+  }
+
+  const meta=(d)=>{
+    const dow=getDOW(y,m,d);
+    const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
+    const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
+    const weekend=dow===0||dow===6;
+    const bg=weekend?(pidx%2===0?'#D6EAF8':'#DDD0E8'):(pidx%2===0?'#EAF4FB':'');
+    const bl=isNewP?'border-left:3px solid var(--accent);':'';
+    return {dow,bg,bl};
+  };
+
+  const dateHeaders=[],dowCells=[],shiftCells=[],wtCells=[],mealCells=[],depCells=[],supCells=[],noteCells=[],apCells=[];
+  for(let d=1;d<=days;d++){
+    const mt=meta(d); const c=sd[d];
+    dateHeaders.push(`<th style="min-width:26px;font-size:9px;background:${mt.bg};${mt.bl}padding:2px 1px;text-align:center">${m.toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}</th>`);
+    dowCells.push(`<td style="text-align:center;font-size:10px;background:${mt.bg};${mt.bl}padding:2px">${DAY_NAMES[mt.dow]}</td>`);
+    let code='',bg='';
+    if(!c||c.type==='off'){code='X';bg='var(--shift-off)';}
+    else if(c.type==='leave'){code='特';bg='var(--shift-leave)';}
+    else if(c.type==='meeting'){code='會';bg='var(--shift-meeting)';}
+    else if(c.type==='training'){code='訓';bg='var(--shift-meeting)';}
+    else if(c.type==='work'){const sh=STATE.shifts.find(x=>x.id===c.shiftId);code=sh?.code||'?';bg=code==='A'?'var(--shift-a)':code==='P'?'var(--shift-p)':code==='O'?'var(--shift-o)':code==='B'?'var(--shift-b)':code==='C'?'var(--shift-c)':'var(--shift-work)';}
+    shiftCells.push(`<td style="${mt.bl}text-align:center;font-size:11px;font-weight:700;background:${bg};padding:2px">${code}</td>`);
+    if(c&&c.type==='work'){const stx=STATE.stores.find(q=>q.id===c.storeId);const dw=getDOW(y,m,d);
+      wtCells.push(`<td style="${mt.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${getCellWorkH(c,stx,dw)}</td>`);
+      mealCells.push(`<td style="${mt.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${getCellMealH(c,stx,dw)||''}</td>`);
+    } else { wtCells.push(`<td style="${mt.bl}background:#F9F9F9;padding:2px"></td>`); mealCells.push(`<td style="${mt.bl}background:#F9F9F9;padding:2px"></td>`); }
+    const dep=notesData[`dep_${d}`]||'',sup=notesData[`sup_${d}`]||'',nt=notesData[`note_${d}`]||'',ap=notesData[`ap_${d}`]||'';
+    depCells.push(`<td style="${mt.bl}padding:2px;background:#FDFDF8;text-align:center;font-size:9px">${dep}</td>`);
+    supCells.push(`<td style="${mt.bl}padding:2px;background:#FDFDF8;text-align:center;font-size:9px">${sup}</td>`);
+    noteCells.push(`<td style="${mt.bl}padding:2px;background:#FFFEF0;text-align:center;font-size:9px">${nt}</td>`);
+    apCells.push(`<td style="${mt.bl}padding:2px;background:#F5F5F5;text-align:center;font-size:9px">${ap}</td>`);
+  }
+
+  const thS='background:var(--surface2);padding:3px 6px;font-size:10px;font-weight:600;white-space:nowrap;border:1px solid var(--border)';
+  const L='font-size:10px;padding:3px 8px;border:1px solid var(--border);white-space:nowrap';
+  const M='font-size:10px;padding:3px 6px;background:var(--surface2);font-weight:600;border:1px solid var(--border);white-space:nowrap';
+  const depCount=Object.keys(notesData).filter(k=>k.startsWith('dep_')&&notesData[k]).length;
+  const supCount=Object.keys(notesData).filter(k=>k.startsWith('sup_')&&notesData[k]).length;
+  const rankLabel=s.role==='leader'?'組長':'主別';
+  const statusTag=(s.status&&s.status!=='active')?`<span class="badge" style="background:#FDECEA;color:#C0392B;margin-left:4px;font-size:9px">${({sick:'病假',parental:'育嬰假',excluded:'排除',resigned:'離職'}[s.status]||s.status)}</span>`:'';
+
+  return `
+  <div style="margin-bottom:16px;border:2px solid var(--border);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-sm)">
+    <div style="overflow-x:auto">
+      <table style="border-collapse:collapse;font-size:11px;width:100%">
+        <thead><tr>
+          <th style="${thS};min-width:84px">人員/店編號</th>
+          <th style="${thS};min-width:54px">項目</th>
+          ${dateHeaders.join('')}
+          <th style="background:var(--accent2);color:#FFF;padding:3px 6px;font-size:10px;white-space:nowrap;border:1px solid var(--border)">月標準工時：${stdH} H</th>
+        </tr></thead>
+        <tbody>
+          <tr><td style="${L}">${store?`${store.storeNo} ${store.name}`:'—'}</td><td style="${M}">星期</td>${dowCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;white-space:nowrap;border:1px solid var(--border)">個人月工時：${workH} H</td></tr>
+          <tr><td style="${L}">${s.empNo} ${s.name}${statusTag}</td><td style="${M}">班別</td>${shiftCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;border:1px solid var(--border)"><div style="display:flex;gap:8px"><span>排班</span><span>服勤</span><span>加班</span></div></td></tr>
+          <tr><td style="${L}">${rankLabel}</td><td style="${M}">服勤時間</td>${wtCells.join('')}<td style="background:#EEF8EE;font-size:12px;font-weight:700;padding:3px 6px;text-align:center;border:1px solid var(--border)">${workH}</td></tr>
+          <tr><td style="${L}">工作 ${workDays}天</td><td style="${M}">用餐</td>${mealCells.join('')}<td style="background:#EEF8EE;font-size:12px;font-weight:700;padding:3px 6px;text-align:center;border:1px solid var(--border)">${mealH}</td></tr>
+          <tr><td style="${L}">目標：${store&&store.target?Number(store.target).toLocaleString():''}</td><td style="${M}">代班</td>${depCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;text-align:center;border:1px solid var(--border)">${depCount?`<strong>${depCount}次</strong>`:''}</td></tr>
+          <tr><td style="${L}">派員：${store?store.staffAlloc:''}</td><td style="${M}">支援</td>${supCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;text-align:center;border:1px solid var(--border)">${supCount?`<strong>${supCount}次</strong>`:''}</td></tr>
+          <tr><td style="${L}">公休 ${offDays}天</td><td style="${M}">備註說明</td>${noteCells.join('')}<td style="background:#FFFEF0;border:1px solid var(--border)"></td></tr>
+          <tr><td style="${L}">請假 ${leaveDays}天</td><td style="${M}">AP班</td>${apCells.join('')}<td style="background:#F5F5F5;border:1px solid var(--border)"></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>`;
 }
 
@@ -2405,7 +2558,7 @@ function openCellEdit(staffId,day,y,m,returnPage){
   showModal(`
   <div class="modal">
     <div class="modal-title">✏️ 修改班表 — ${s?.name} ${y}/${pad(m)}/${pad(day)}</div>
-    <div class="alert alert-info" style="margin-bottom:12px">🔒 儲存後此格子會被鎖定，重新自動排班時不會覆蓋。</div>
+    <div class="alert alert-info" style="margin-bottom:12px">${icon('lock')} 儲存後此格子會被鎖定，重新自動排班時不會覆蓋。</div>
     <div class="form-grid">
       <div class="form-group" style="grid-column:1/-1">
         <label>班別類型</label>
@@ -2546,7 +2699,7 @@ function renderHistory(viewKey){
   }
 
   return `
-  <div class="page-header"><div><div class="page-title">🗂 歷月班表</div><div class="page-sub">點選月份查看該月班表</div></div></div>
+  <div class="page-header"><div><div class="page-title">${icon('archive')}歷月班表</div><div class="page-sub">點選月份查看該月班表</div></div></div>
   <div class="card">
     <div class="card-title">月份選擇</div>
     <div class="history-grid">
@@ -2584,11 +2737,11 @@ function renderHistoryMonth(y,m){
 
   return `
   <div class="page-header">
-    <div><div class="page-title">🗂 ${y}年${m}月 班表</div></div>
+    <div><div class="page-title">${icon('archive')}${y}年${m}月 班表</div></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-outline" onclick="showPage('history')">← 返回月份列表</button>
-      <button class="btn btn-outline" onclick="exportExcelMonth(${y},${m},null)">⬇ Excel</button>
-      <button class="btn btn-outline" onclick="window.print()">⬇ PDF</button>
+      <button class="btn btn-outline" onclick="showPage('history')">${icon('arrow-left')} 返回月份列表</button>
+      <button class="btn btn-outline" onclick="exportExcelMonth(${y},${m},null)">${icon('download')} Excel</button>
+      <button class="btn btn-outline" onclick="window.print()">${icon('print')} PDF</button>
     </div>
   </div>
   <div class="legend">
@@ -2610,9 +2763,9 @@ function renderAssign(){
   const groups=getAllGroups();
   return `
   <div class="page-header">
-    <div><div class="page-title">🔗 人員固定指派</div><div class="page-sub">設定每位員工固定分配的店家，自動排班時優先安排</div></div>
+    <div><div class="page-title">${icon('link')}人員固定指派</div><div class="page-sub">設定每位員工固定分配的店家，自動排班時優先安排</div></div>
   </div>
-  <div class="alert alert-info">ℹ️ 固定指派的員工在自動排班時會優先排到指定店家。若員工有多間指派店家，系統會輪流安排。未指派的員工可補到任何同組店家。</div>
+  <div class="alert alert-info">${icon('info')} 固定指派的員工在自動排班時會優先排到指定店家。若員工有多間指派店家，系統會輪流安排。未指派的員工可補到任何同組店家。</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
     ${groups.map(g=>`
     <div class="card">
@@ -2683,11 +2836,10 @@ function clearAssign(staffId){
 function renderGroups(){
   return `
   <div class="page-header">
-    <div><div class="page-title">🏷 組別管理</div><div class="page-sub">新增、編輯、刪除組別，每個組別可指定組長</div></div>
+    <div><div class="page-title">${icon('tag')}組別管理</div><div class="page-sub">新增、編輯、刪除組別，每個組別可指定組長</div></div>
     <button class="btn btn-primary" onclick="openAddGroupModal()">＋ 新增組別</button>
   </div>
-  <div class="alert alert-info">
-    ℹ️ 新增組別後，導覽列會自動出現對應班表頁。人員和店家的「所屬組」選單也會同步更新。<br>
+  <div class="alert alert-info">${icon('info')} 新增組別後，導覽列會自動出現對應班表頁。人員和店家的「所屬組」選單也會同步更新。<br>
     組長請先在「人員管理」新增，角色設為「組長」並指定所屬組後，就會出現在下方選單。
   </div>
   <div class="card">
@@ -2760,8 +2912,7 @@ function openAddGroupModal(){
       <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">選擇組長（可複選）</label>
       ${groupLeaderCheckboxes(null,[])}
     </div>
-    <div class="alert alert-info" style="font-size:11px;margin-top:8px">
-      💡 勾選的組長會自動改為此組的所屬組。若要新增尚未建立的組長，請先至「人員管理」新增。
+    <div class="alert alert-info" style="font-size:11px;margin-top:8px">${icon('bulb')} 勾選的組長會自動改為此組的所屬組。若要新增尚未建立的組長，請先至「人員管理」新增。
     </div>
     <div class="form-actions">
       <button class="btn btn-outline" onclick="closeModal()">取消</button>
@@ -2804,8 +2955,7 @@ function openEditGroupModal(gid){
       <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">組長（可複選）</label>
       ${groupLeaderCheckboxes(gid, currentLeaderIds)}
     </div>
-    <div class="alert alert-info" style="font-size:11px;margin-top:8px">
-      💡 取消勾選的組長會保留在此組，但角色不變。若要將組長移至其他組，請至「人員管理」修改所屬組。
+    <div class="alert alert-info" style="font-size:11px;margin-top:8px">${icon('bulb')} 取消勾選的組長會保留在此組，但角色不變。若要將組長移至其他組，請至「人員管理」修改所屬組。
     </div>
     <div class="form-actions">
       <button class="btn btn-outline" onclick="closeModal()">取消</button>
@@ -2853,7 +3003,7 @@ function renderStaff(){
   const officeStaff=STATE.staff.filter(s=>s.groupId==='office');
   return `
   <div class="page-header">
-    <div><div class="page-title">👥 人員管理</div><div class="page-sub">共 ${STATE.staff.length} 位</div></div>
+    <div><div class="page-title">${icon('users')}人員管理</div><div class="page-sub">共 ${STATE.staff.length} 位</div></div>
     <button class="btn btn-primary" onclick="openAddStaffModal()">＋ 新增人員</button>
   </div>
   ${groups.map(g=>`
@@ -2891,8 +3041,8 @@ function renderStaffTable(gid,y,m){
         <td style="font-size:11px">${assigns.length?assigns.map(id=>{const st=STATE.stores.find(x=>x.id===id);return st?`<span class="assign-tag">${st.name.substring(0,5)}</span>`:''}).join(''):'–'}</td>
         <td>
           <button class="btn btn-outline btn-sm" onclick="openEditStaffModal('${s.id}')">編輯</button>
-          <button class="btn btn-purple btn-sm" onclick="openAssignModal('${s.id}')">🔗指派</button>
-          <button class="btn btn-outline btn-sm" onclick="openLeaveModal('${s.id}')">📌特殊</button>
+          <button class="btn btn-purple btn-sm" onclick="openAssignModal('${s.id}')">${icon('link')}指派</button>
+          <button class="btn btn-outline btn-sm" onclick="openLeaveModal('${s.id}')">${icon('pin')}特殊</button>
           ${s.role!=='leader'?`<button class="btn btn-danger btn-sm" onclick="deleteStaff('${s.id}')">刪除</button>`:''}
         </td>
       </tr>`;
@@ -2905,9 +3055,9 @@ function renderStores(){
   const groups=getAllGroups();
   return `
   <div class="page-header">
-    <div><div class="page-title">🏪 店家管理</div><div class="page-sub">共 ${STATE.stores.length} 間</div></div>
+    <div><div class="page-title">${icon('store')}店家管理</div><div class="page-sub">共 ${STATE.stores.length} 間</div></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-outline" onclick="openAddTempStoreModal()">⚡ 臨時店點</button>
+      <button class="btn btn-outline" onclick="openAddTempStoreModal()">${icon('plus')} 臨時店點</button>
       <button class="btn btn-primary" onclick="openAddStoreModal()">＋ 新增店家</button>
     </div>
   </div>
@@ -2952,7 +3102,7 @@ function renderSpecial(){
   const evts=STATE.specialEvents.filter(e=>{const d=new Date(e.date);return d.getFullYear()===y&&d.getMonth()+1===m});
   return `
   <div class="page-header">
-    <div><div class="page-title">📌 特殊安排</div><div class="page-sub">特休、開會、教育訓練</div></div>
+    <div><div class="page-title">${icon('pin')}特殊安排</div><div class="page-sub">特休、開會、教育訓練</div></div>
     <button class="btn btn-primary" onclick="openAddSpecialModal()">＋ 新增</button>
   </div>
   <div class="month-nav">
@@ -3006,12 +3156,11 @@ function renderSettings(){
   }
 
   return `
-  <div class="page-header"><div><div class="page-title">⚙️ 系統設定</div></div></div>
+  <div class="page-header"><div><div class="page-title">${icon('settings')}系統設定</div></div></div>
 
   <div class="card">
     <div class="card-title">📅 兩週變形工時設定</div>
-    <div class="alert alert-info" style="margin-bottom:12px">
-      ℹ️ 以 <strong>2025/7/6</strong> 為基準錨點，每14天一個雙週週期，自動推算全年。每月可手動覆寫起始日。<br>
+    <div class="alert alert-info" style="margin-bottom:12px">${icon('info')} 以 <strong>2025/7/6</strong> 為基準錨點，每14天一個雙週週期，自動推算全年。每月可手動覆寫起始日。<br>
       工時規則：兩週10工作天 × 8小時值勤 = <strong>80小時</strong>（扣用餐0.5h，計薪7.5h/天）
     </div>
     <div class="form-group" style="max-width:320px;margin-bottom:16px">
@@ -3067,12 +3216,12 @@ function renderSettings(){
     <div class="card-title">資料管理</div>
     <div id="storage-info" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-success" onclick="pushToCloud()">☁️ 推送本機資料到雲端</button>
-      <button class="btn btn-info" onclick="loadFromCloud().then(ok=>{if(ok){showPage('dashboard');showToast('☁️ 已從雲端載入最新資料');}else{showToast('⚠️ 雲端無資料或連線失敗','warn');}})">☁️ 重新從雲端載入</button>
-      <button class="btn btn-outline" onclick="exportJSON()">⬇ 匯出備份 JSON</button>
-      <button class="btn btn-outline" onclick="importJSON()">⬆ 匯入備份 JSON</button>
-      <button class="btn btn-outline" onclick="clearAllSchedules()">🗑 清除所有班表</button>
-      <button class="btn btn-danger" onclick="clearStorage()">⚠ 清除全部資料（重設）</button>
+      <button class="btn btn-success" onclick="pushToCloud()">${icon('upload')} 推送本機資料到雲端</button>
+      <button class="btn btn-info" onclick="loadFromCloud().then(ok=>{if(ok){showPage('dashboard');showToast('☁️ 已從雲端載入最新資料');}else{showToast('⚠️ 雲端無資料或連線失敗','warn');}})">${icon('cloud-refresh')} 重新從雲端載入</button>
+      <button class="btn btn-outline" onclick="exportJSON()">${icon('download')} 匯出備份 JSON</button>
+      <button class="btn btn-outline" onclick="importJSON()">${icon('upload')} 匯入備份 JSON</button>
+      <button class="btn btn-outline" onclick="clearAllSchedules()">${icon('trash')} 清除所有班表</button>
+      <button class="btn btn-danger" onclick="clearStorage()">${icon('warn')} 清除全部資料（重設）</button>
     </div>
     <div class="alert alert-info" style="margin-top:12px;font-size:12px">
       ☁️ 資料即時同步至 Firebase 雲端，所有使用者共用同一份資料。建議每月定期「匯出備份 JSON」存到電腦作為備份。
@@ -3609,7 +3758,7 @@ function openLeaveInputModal(gid, y, m, groupLabel){
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline" onclick="closeModal()">取消</button>
         <button class="btn btn-warn" onclick="clearAllLeavesInModal('${gid}',${y},${m})">清除本月所有特殊安排</button>
-        <button class="btn btn-success" onclick="confirmLeaveAndSchedule('${gid}',${y},${m})">✅ 確認並執行自動排班</button>
+        <button class="btn btn-success" onclick="confirmLeaveAndSchedule('${gid}',${y},${m})">${icon('check')} 確認並執行自動排班</button>
       </div>
     </div>
   </div>`);
