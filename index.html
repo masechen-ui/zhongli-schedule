@@ -1911,17 +1911,17 @@ function renderStoreView(){
       const dow=getDOW(y,m,d);
       const weekend=dow===0||dow===6;
       const bgBase=weekend?(pidx%2===0?'#D6EAF8':'#DDD0E8'):(pidx%2===0?'#EAF4FB':'');
-      const editBtn=`onclick="openCellEdit('${s.id}',${d},${y},${m},'store-view')" title="點擊修改班別" style="cursor:pointer;"`;
+      const editBtn=`onclick="openCellEdit('${s.id}',${d},${y},${m},'store-view')" title="點擊修改班別"`;
       if(!c){
-        shiftCells.push(`<td class="cell-unsched" ${editBtn} style="${bl}text-align:center;font-size:11px;padding:2px">未</td>`);
+        shiftCells.push(`<td class="cell-unsched" ${editBtn} style="${bl}text-align:center;font-size:11px;padding:2px;cursor:pointer">未</td>`);
       } else if(c.type==='off'){
-        shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-off);color:#9B8B7E;padding:2px">X</td>`);
+        shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-off);color:#9B8B7E;padding:2px;cursor:pointer">X</td>`);
       } else if(c.type==='leave'){
-        shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-leave);color:#C0392B;padding:2px">特</td>`);
+        shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-leave);color:#C0392B;padding:2px;cursor:pointer">特</td>`);
       } else if(c.type==='meeting'){
-        shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-meeting);color:#7D3C98;padding:2px">會</td>`);
+        shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-meeting);color:#7D3C98;padding:2px;cursor:pointer">會</td>`);
       } else if(c.type==='training'){
-        shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-meeting);color:#7D3C98;padding:2px">訓</td>`);
+        shiftCells.push(`<td ${editBtn} style="${bl}text-align:center;font-size:11px;font-weight:700;background:var(--shift-meeting);color:#7D3C98;padding:2px;cursor:pointer">訓</td>`);
       } else if(c.type==='work'){
         const sh=STATE.shifts.find(x=>x.id===c.shiftId);
         const code=sh?.code||'?';
@@ -1931,7 +1931,7 @@ function renderStoreView(){
         const otherStore=notThisStore?STATE.stores.find(x=>x.id===c.storeId):null;
         const otherName=otherStore?otherStore.name.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'').substring(0,3):'';
         if(notThisStore){
-          shiftCells.push(`<td onclick="openCellEdit('${s.id}',${d},${y},${m},'store-view')" title="點擊修改班別（目前在${otherStore?.name||'其他店'}）" style="${bl}text-align:center;font-size:9px;background:#F0F0F0;color:#AAA;padding:2px;cursor:pointer">${code}<br>${otherName}</td>`);
+          shiftCells.push(`<td onclick="openCellEdit('${s.id}',${d},${y},${m},'store-view')" title="${code}班，當天在${otherStore?.name||'其他店'}（點擊修改）" style="${bl}text-align:center;font-size:11px;font-weight:700;background:#EFEDEA;color:#9B8B7E;padding:2px;cursor:pointer">${code}</td>`);
         } else {
           shiftCells.push(`<td onclick="openCellEdit('${s.id}',${d},${y},${m},'store-view')" title="點擊修改班別" style="${bl}text-align:center;font-size:11px;font-weight:700;background:${bg};padding:2px;cursor:pointer">${code}</td>`);
         }
@@ -1975,7 +1975,12 @@ function renderStoreView(){
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
       const bl=isNewP?'border-left:3px solid var(--accent);':'';
       const val=notesData[`dep_${d}`]||'';
-      deputyCells.push(`<td style="${bl}padding:1px;background:#FDFDF8"><input value="${val}" style="width:100%;font-size:9px;border:none;background:transparent;text-align:center;padding:1px" onchange="saveStoreNote('${store.id}','${s.id}','${schedKey(y,m)}','dep_${d}',this.value)"></td>`);
+      const cD=sd[d];
+      const elseStore=(cD&&cD.type==='work'&&cD.storeId!==store.id)?STATE.stores.find(x=>x.id===cD.storeId):null;
+      const elseName=elseStore?elseStore.name.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'').substring(0,4):'';
+      const depDisp=val||elseName;
+      const depStyle=val?'color:inherit;font-style:normal':'color:var(--accent2);font-style:italic';
+      deputyCells.push(`<td style="${bl}padding:1px;background:#FDFDF8" title="${elseStore?`當天在${elseStore.name}（自動帶出，可覆蓋）`:''}"><input value="${depDisp}" style="width:100%;font-size:9px;border:none;background:transparent;text-align:center;padding:1px;${depStyle}" onchange="saveStoreNote('${store.id}','${s.id}','${schedKey(y,m)}','dep_${d}',this.value)"></td>`);
     }
 
     // 支援行（可編輯）
@@ -3933,9 +3938,9 @@ function getCellShiftHours(c){ return ''; }
 function getCellMealHours(c){ return ''; }
 
 // ── SheetJS 格式化班表匯出 ──
-async function exportExcelFormatted(y,m,gid){
+async function exportExcelFormatted(y,m,gid,opts={}){
   const ms=STATE.schedules[schedKey(y,m)]||{};
-  const staffList=gid?STATE.staff.filter(s=>s.groupId===gid):STATE.staff;
+  const staffList=opts.staffList?opts.staffList:(gid?STATE.staff.filter(s=>s.groupId===gid):STATE.staff);
   if(staffList.every(s=>!Object.keys(ms[s.id]||{}).length)){alert('尚未產生班表');return}
 
   // 動態載入 SheetJS
@@ -4015,8 +4020,9 @@ async function exportExcelFormatted(y,m,gid){
   // ── 每個員工區塊 ──
   staffList.forEach((s,si)=>{
     const sd=ms[s.id]||{};
-    const store=STATE.stores.find(x=>getAssignedStores(s.id).includes(x.id))||null;
+    const store=opts.fixedStore||STATE.stores.find(x=>getAssignedStores(s.id).includes(x.id))||null;
     const storeLabel=store?`${store.storeNo||''} ${store.name.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'').substring(0,6)}`:'';
+    const notesData=(store&&STATE.storeViewNotes)?(STATE.storeViewNotes[`${store.id}_${s.id}_${schedKey(y,m)}`]||{}):{};
 
     // 統計計算
     let totalWork=0,totalMeal=0,leaveDays=0,offDays=0,meetDays=0;
@@ -4167,7 +4173,10 @@ async function exportExcelFormatted(y,m,gid){
     for(let d=1;d<=days;d++){
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
-      setCell(fixedCols+d-1,R,cell('',C.rowSub,font(false,8),undefined,isNewP?thickLeft():border()));
+      const cD=sd[d];
+      const elseStore=(store&&cD&&cD.type==='work'&&cD.storeId!==store.id)?STATE.stores.find(x=>x.id===cD.storeId):null;
+      const depV=notesData[`dep_${d}`]||(elseStore?elseStore.name.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'').substring(0,4):'');
+      setCell(fixedCols+d-1,R,cell(depV,C.rowSub,font(false,8),undefined,isNewP?thickLeft():border()));
     }
     setCell(sIdx,R,cell('請假',C.statVal,font(false,8)));
     setCell(sIdx+1,R,cell(leaveDays>0?leaveDays+'天':'–',C.statVal,font(true,9)));
@@ -4183,7 +4192,7 @@ async function exportExcelFormatted(y,m,gid){
     for(let d=1;d<=days;d++){
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
-      setCell(fixedCols+d-1,R,cell('',C.rowSub,font(false,8),undefined,isNewP?thickLeft():border()));
+      setCell(fixedCols+d-1,R,cell(notesData[`sup_${d}`]||'',C.rowSub,font(false,8),undefined,isNewP?thickLeft():border()));
     }
     for(let i=0;i<statCols;i++)setCell(sIdx+i,R,cell('',C.rowSub));
     R++;
@@ -4193,11 +4202,11 @@ async function exportExcelFormatted(y,m,gid){
     setCell(1,R,cell('備註說明',{fgColor:{rgb:'FFF8F0'}},font(true,7.5),'center'));
     setCell(2,R,cell('預留',{fgColor:{rgb:'FFF8F0'}},font(false,7.5),'center'));
     setCell(3,R,cell('小盤',{fgColor:{rgb:'FFF8F0'}},font(false,7.5),'center'));
-    // 備註欄：夜盤、大整標示在特定位置（留空讓手填）
+    // 備註欄：帶入已存備註
     for(let d=1;d<=days;d++){
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
-      setCell(fixedCols+d-1,R,cell('',{fgColor:{rgb:'FFF8F0'}},font(false,7.5),undefined,isNewP?thickLeft():border()));
+      setCell(fixedCols+d-1,R,cell(notesData[`note_${d}`]||'',{fgColor:{rgb:'FFF8F0'}},font(false,7.5),undefined,isNewP?thickLeft():border()));
     }
     for(let i=0;i<statCols;i++)setCell(sIdx+i,R,cell('',{fgColor:{rgb:'FFF8F0'}}));
     R++;
@@ -4210,7 +4219,7 @@ async function exportExcelFormatted(y,m,gid){
     for(let d=1;d<=days;d++){
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
-      setCell(fixedCols+d-1,R,cell('',C.rowSub,font(false,8),undefined,isNewP?thickLeft():border()));
+      setCell(fixedCols+d-1,R,cell(notesData[`ap_${d}`]||'',C.rowSub,font(false,8),undefined,isNewP?thickLeft():border()));
     }
     for(let i=0;i<statCols;i++)setCell(sIdx+i,R,cell('',C.rowSub));
     R++;
@@ -4240,11 +4249,24 @@ async function exportExcelFormatted(y,m,gid){
   ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:R,c:totalCols-1}});
 
   XLSX.utils.book_append_sheet(wb,ws,`${y}年${m}月`);
-  XLSX.writeFile(wb,`中壢課班表_${y}年${m}月_${groupLabel}.xlsx`);
+  XLSX.writeFile(wb,(opts.fileLabel?`${opts.fileLabel}_${y}年${m}月`:`中壢課班表_${y}年${m}月_${groupLabel}`)+'.xlsx');
 }
 
 // 舊版 CSV 保留為備用
 function exportExcelMonth(y,m,gid){exportExcelFormatted(y,m,gid)}
+
+function exportStoreViewExcel(storeId,y,m){
+  const store=STATE.stores.find(x=>x.id===storeId);
+  if(!store){alert('找不到店家');return}
+  const staffList=STATE.staff.filter(s=>getAssignedStores(s.id).includes(storeId));
+  if(!staffList.length){alert('此店尚無指派人員');return}
+  exportExcelFormatted(y,m,null,{staffList,fixedStore:store,fileLabel:store.name.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'')+'_店家視角'});
+}
+function exportStaffViewExcel(staffId,y,m){
+  const s=STATE.staff.find(x=>x.id===staffId);
+  if(!s){alert('找不到人員');return}
+  exportExcelFormatted(y,m,null,{staffList:[s],fileLabel:s.name+'_人員視角'});
+}
 
 // ==================== localStorage 持久化 ====================
 const LS_KEY = 'schedule_system_v1';
