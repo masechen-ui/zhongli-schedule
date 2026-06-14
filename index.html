@@ -130,6 +130,18 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 
 /* ── 登入覆蓋層 ── */
 #login-overlay{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center}
+#district-overlay{position:fixed;inset:0;background:var(--bg);z-index:600;display:flex;align-items:center;justify-content:center;padding:24px}
+.district-picker{width:100%;max-width:760px;text-align:center}
+.district-picker h2{font-size:24px;font-weight:700;margin:0 0 4px;color:var(--text)}
+.district-hint{font-size:13px;color:var(--muted,#888);margin:0 0 28px}
+.district-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.district-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:120px;padding:20px 16px;border:1px solid var(--border,#E0DAD0);border-radius:16px;background:var(--card,#FFF);cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s;font-family:inherit}
+.district-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.08);border-color:var(--primary,#C0392B)}
+.district-card:active{transform:translateY(0)}
+.district-card-name{font-size:18px;font-weight:700;color:var(--text)}
+.district-card-sub{font-size:12px;color:var(--muted,#999)}
+.district-card-add{border-style:dashed;background:transparent}
+.district-card-plus{font-size:30px;line-height:1;color:var(--primary,#C0392B);font-weight:300}
 .login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;width:360px;max-width:90vw;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.12)}
 .login-logo{font-size:36px;margin-bottom:8px}
 .login-title{font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px}
@@ -212,8 +224,25 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     const app = initializeApp(FIREBASE_CONFIG);
     const db  = getFirestore(app);
 
-    // ── 固定使用同一個 document key，存全部資料 ──
-    const CLOUD_KEY = 'schedule';
+    // ── 課區雲端 key（可切換）：中壢課='schedule'，其他課區各自一份文件 ──
+    let CLOUD_KEY = 'schedule';
+    window.setCloudKey = function(k){ CLOUD_KEY = k || 'schedule'; };
+    window.getCloudKey = function(){ return CLOUD_KEY; };
+
+    // ── 課區清單（單一索引文件 app/_districts）──
+    window.loadDistricts = async function(){
+      try{
+        const snap = await getDoc(doc(db, 'app', '_districts'));
+        if(!snap.exists()) return null;          // 尚未初始化
+        return snap.data().list || [];
+      }catch(e){ console.warn('loadDistricts 失敗:', e); return null; }
+    };
+    window.saveDistricts = async function(list){
+      try{
+        await setDoc(doc(db, 'app', '_districts'), { list, updatedAt: serverTimestamp() });
+        return true;
+      }catch(e){ console.warn('saveDistricts 失敗:', e); return false; }
+    };
 
     // ── 雲端儲存：把完整 STATE 推到 Firestore ─────
     window.saveToCloud = async function(showMsg=false){
@@ -323,6 +352,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     window.saveToCloud   = async ()=>{};
     window.loadFromCloud = async ()=> false;
     window.startCloudSync = ()=>{};
+    window.setCloudKey   = ()=>{};
+    window.getCloudKey   = ()=> 'schedule';
+    window.loadDistricts = async ()=> null;
+    window.saveDistricts = async ()=> false;
     console.info('ℹ️ Firebase 未設定，使用純本機模式（localStorage）');
   }
 </script>
@@ -330,9 +363,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 </head>
 <body>
 <header>
-  <h1><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="M8 13.5h2.5M13.5 13.5H16M8 17h2.5"/></svg><span>中壢課</span> 自動排班系統</h1>
+  <h1><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="M8 13.5h2.5M13.5 13.5H16M8 17h2.5"/></svg><span id="hdr-district-name">中壢課</span> 自動排班系統</h1>
   <div class="header-actions">
     <span id="save-status" style="font-size:11px;color:rgba(255,255,255,0.72)"></span>
+    <button class="btn btn-ghost btn-sm" onclick="showDistrictPicker()" title="切換課區"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/></svg> 課區</button>
     <button class="btn btn-ghost btn-sm" onclick="exportExcel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg> Excel</button>
     <button class="btn btn-ghost btn-sm" onclick="exportPDF()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8V3h10v5"/><rect x="4" y="8" width="16" height="8" rx="1.5"/><path d="M7 14h10v6H7z"/><circle cx="17" cy="11" r=".7"/></svg> PDF</button>
   </div>
@@ -342,7 +376,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     <div class="nav-label" style="margin-top:8px">班表</div>
     <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.2"/><rect x="14" y="3" width="7" height="5" rx="1.2"/><rect x="14" y="12" width="7" height="9" rx="1.2"/><rect x="3" y="16" width="7" height="5" rx="1.2"/></svg>概覽</div>
     <div id="nav-group-items"><!-- 動態產生 --></div>
-    <div class="nav-item" onclick="showPage('schedule-all')" id="nav-schedule-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3.5"/></svg>中壢課總表</div>
+    <div class="nav-item" onclick="showPage('schedule-all')" id="nav-schedule-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3.5"/></svg><span id="nav-allname">中壢課總表</span></div>
     <div class="nav-item" onclick="showPage('store-view')" id="nav-store-view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l1.2-4.6A1 1 0 0 1 5.2 4h13.6a1 1 0 0 1 .97.74L21 9"/><path d="M4.5 9v10a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V9"/><path d="M9 20.5v-5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5"/></svg>店家視角</div>
     <div class="nav-item" onclick="showPage('staff-view')" id="nav-staff-view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>人員視角</div>
     <div class="nav-item" onclick="showPage('history')" id="nav-history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>歷月班表</div>
@@ -358,6 +392,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 </div>
 <!-- 登入覆蓋層已移除 -->
 <div id="modal-container"></div>
+<div id="district-overlay" style="display:none"></div>
 
 <script>
 // ==================== 常數 ====================
@@ -428,6 +463,11 @@ window.STATE={
   // { id, name, leaderEmpNos:[], color }
   groups:[],
 };
+
+// ==================== 多課區 ====================
+let ACTIVE_DISTRICT = 'schedule';     // 當前課區 key（中壢課='schedule'）
+let ACTIVE_DISTRICT_NAME = '中壢課';   // 當前課區顯示名稱
+function dn(){ return ACTIVE_DISTRICT_NAME; }   // district name（給各 render 動態顯示）
 const LOGIN_ACCOUNTS={
   '03250':{role:'admin',name:'管理員'},
 };
@@ -1450,7 +1490,7 @@ function renderDashboard(){
 
   return `
   <div class="page-header">
-    <div><div class="page-title">${icon('dashboard')}概覽</div><div class="page-sub">${y}年${m}月 · 中壢課排班系統</div></div>
+    <div><div class="page-title">${icon('dashboard')}概覽</div><div class="page-sub">${y}年${m}月 · ${dn()}排班系統</div></div>
   </div>
   <div class="stats-row">
     <div class="stat-card"><div class="stat-val">${STATE.staff.filter(s=>!s.status||s.status==='active').length}</div><div class="stat-label">在班人員</div></div>
@@ -1462,7 +1502,7 @@ function renderDashboard(){
     <div class="card-title">⚡ 快速操作</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       ${getAllGroups().map(g=>`<button class="btn btn-primary" onclick="showPage('schedule-${g.id}')" style="border-left:3px solid ${g.color}">${icon('calendar')} ${g.name}班表</button>`).join('')}
-      <button class="btn btn-outline" onclick="showPage('schedule-all')">${icon('clipboard')} 中壢課總表</button>
+      <button class="btn btn-outline" onclick="showPage('schedule-all')">${icon('clipboard')} ${dn()}總表</button>
       <button class="btn btn-purple" onclick="showPage('assign')">${icon('link')} 人員指派</button>
       <button class="btn btn-info" onclick="showPage('special')">${icon('pin')} 特殊安排</button>
       <button class="btn btn-outline" onclick="showPage('history')">${icon('archive')} 歷月班表</button>
@@ -1757,7 +1797,7 @@ function renderScheduleAll(){
 
   if(!hasData) return `
     <div class="page-header">
-      <div><div class="page-title">${icon('clipboard')}中壢課總表</div><div class="page-sub">${y}年${m}月 · 統合唯讀</div></div>
+      <div><div class="page-title">${icon('clipboard')}${dn()}總表</div><div class="page-sub">${y}年${m}月 · 統合唯讀</div></div>
     </div>
     ${nav}
     <div class="alert alert-info">${icon('info')} 尚無班表資料。請先至各組班表頁面執行自動排班。</div>
@@ -1774,7 +1814,7 @@ function renderScheduleAll(){
   return `
   <div class="page-header">
     <div>
-      <div class="page-title">${icon('clipboard')}中壢課總表</div>
+      <div class="page-title">${icon('clipboard')}${dn()}總表</div>
       <div class="page-sub">${y}年${m}月 · 統合唯讀 · ${groupsData.map(g=>`${g.name}${g.staff.length}人`).join(' / ')}</div>
     </div>
     <div style="display:flex;gap:8px">
@@ -3927,7 +3967,7 @@ function exportPDF(){
         👤 人員視角（目前選取的人）
       </button>
       <button class="btn btn-outline" onclick="closeModal();showPage('schedule-all');setTimeout(()=>window.print(),300)">
-        📋 中壢課總表
+        📋 ${dn()}總表
       </button>
     </div>
     <div class="form-actions">
@@ -3972,7 +4012,7 @@ async function exportExcelFormatted(y,m,gid,opts={}){
 
   const days=daysInMonth(y,m);
   const periods=getBiweeklyPeriods(y,m);
-  const groupLabel=gid?getGroupName(gid):'中壢課';
+  const groupLabel=gid?getGroupName(gid):dn();
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet(`${y}年${m}月`,{
     pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,margins:{left:0.2,right:0.2,top:0.3,bottom:0.3,header:0.1,footer:0.1}},
@@ -4274,7 +4314,7 @@ async function exportExcelFormatted(y,m,gid,opts={}){
   merges.forEach(mg=>{try{ws.mergeCells(mg[0],mg[1],mg[2],mg[3])}catch(e){}});
   ws.pageSetup.printTitlesRow='1:1';
 
-  const fname=(opts.fileLabel?`${opts.fileLabel}_${y}年${m}月`:`中壢課班表_${y}年${m}月_${groupLabel}`)+'.xlsx';
+  const fname=(opts.fileLabel?`${opts.fileLabel}_${y}年${m}月`:`${dn()}班表_${y}年${m}月_${groupLabel}`)+'.xlsx';
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
@@ -4300,7 +4340,7 @@ function exportStaffViewExcel(staffId,y,m){
 }
 
 // ==================== localStorage 持久化 ====================
-const LS_KEY = 'schedule_system_v1';
+let LS_KEY = 'schedule_system_v1';   // 切換課區時改後綴：中壢課維持原值，其他課區為 _<key>
 
 // 只寫 localStorage，不觸發雲端推送（供 loadFromCloud 使用，避免無限循環）
 window._saveLocalOnly = function(){
@@ -4382,12 +4422,12 @@ function loadFromStorage(){
 }
 
 async function clearStorage(){
-  if(!confirm('確定要清除全部資料？\n這會清除本機和雲端所有班表、人員、店家設定，並重設為系統預設值。\n此操作無法復原！'))return;
+  if(!confirm('確定要清除「'+ACTIVE_DISTRICT_NAME+'」全部資料？\n這會清除本機和雲端所有班表、人員、店家設定，並重設為'+(ACTIVE_DISTRICT==='schedule'?'系統預設值':'空白（保留預設班別）')+'。\n此操作無法復原！'))return;
   localStorage.removeItem(LS_KEY);
-  initData();
+  if(ACTIVE_DISTRICT==='schedule'){ initData(); } else { initBlankDistrict(); }
   if(window.saveToCloud) await window.saveToCloud(false);
   showPage('dashboard');
-  showToast('已清除所有資料，已還原為預設值');
+  showToast('已清除「'+ACTIVE_DISTRICT_NAME+'」資料，已還原');
 }
 
 // 自動儲存：每次 showPage 和重要操作後觸發
@@ -4466,7 +4506,7 @@ function exportJSON(){
   };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`中壢課排班備份_${new Date().toISOString().slice(0,10)}.json`;a.click();
+  a.download=`${dn()}排班備份_${new Date().toISOString().slice(0,10)}.json`;a.click();
   showToast('備份檔案已下載');
 }
 function importJSON(){
@@ -4561,40 +4601,165 @@ function guestMode(){
   showPage('dashboard');
 }
 
-// ==================== 初始化 ====================
-function _init(){
-  // 先用 localStorage 快速還原畫面
-  const restored = loadFromStorage();
-  if(!restored) initData();
-  STATE.login = {loggedIn:true, empNo:'03250', role:'admin', name:'中壢課'};
+// ==================== 多課區：選擇 / 切換 / 進入 ====================
+function _escHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// 套用課區名稱到 header / nav / title（render 內的 ${dn()} 會在 showPage 時自動更新）
+function applyDistrictName(){
+  document.title = ACTIVE_DISTRICT_NAME + ' 自動排班系統';
+  const h = document.getElementById('hdr-district-name'); if(h) h.textContent = ACTIVE_DISTRICT_NAME;
+  const n = document.getElementById('nav-allname');       if(n) n.textContent = ACTIVE_DISTRICT_NAME + '總表';
+}
+
+// 全新（空白）課區的起始資料：staff/stores/groups 全空，只保留 5 個全公司通用班別
+function initBlankDistrict(){
+  STATE.staff=[]; STATE.stores=[]; STATE.groups=[];
+  STATE.schedules={}; STATE.specialEvents=[]; STATE.staffAssignments={};
+  STATE.storeViewNotes={}; STATE.storeShiftTimes={};
+  STATE.shifts=getDefaultShifts();
+  STATE.biweeklyAnchor='2025-07-06';
+  STATE.biweeklyOverrides={};
+}
+
+// 渲染課區選擇畫面
+function renderDistrictPicker(list){
+  window._districtList = list || [];
+  const ol = document.getElementById('district-overlay');
+  if(!ol) return;
+  const cards = window._districtList.map((d,i)=>`
+    <button class="district-card" onclick="enterDistrictByIdx(${i})">
+      <div class="district-card-name">${_escHtml(d.name)}</div>
+      <div class="district-card-sub">${d.key==='schedule'?'主課區':'課區'}</div>
+    </button>`).join('');
+  ol.innerHTML = `
+    <div class="district-picker">
+      <h2>選擇課區</h2>
+      <p class="district-hint">點選要進入的課區，或新增一個由其他課長自行建立人員與店家。</p>
+      <div class="district-grid">
+        ${cards}
+        <button class="district-card district-card-add" onclick="createDistrict()">
+          <div class="district-card-plus">＋</div>
+          <div class="district-card-sub">新增課區</div>
+        </button>
+      </div>
+    </div>`;
+  ol.style.display='flex';
+}
+function hideDistrictPicker(){ const ol=document.getElementById('district-overlay'); if(ol) ol.style.display='none'; }
+
+// header「課區」按鈕：回到選擇畫面（不重載頁面，資料留在雲端）
+async function showDistrictPicker(){
+  let list = window._districtList;
+  if(!list || !list.length){ list = (await window.loadDistricts()) || [{key:'schedule',name:'中壢課'}]; }
+  renderDistrictPicker(list);
+}
+function enterDistrictByIdx(i){
+  const d = (window._districtList||[])[i];
+  if(d) enterDistrict(d.key, d.name);
+}
+
+// 新增課區
+async function createDistrict(){
+  const raw = prompt('請輸入新課區名稱（例如：桃園課、桃專門店、桃直營店）：');
+  if(raw===null) return;
+  const name = raw.trim();
+  if(!name){ showToast('課區名稱不可空白','warn'); return; }
+  let list = window._districtList || (await window.loadDistricts()) || [];
+  if(list.find(d=>d.name===name)){
+    if(!confirm('已有同名課區「'+name+'」，仍要新增嗎？')) return;
+  }
+  const key = 'district_' + Date.now();
+  list = [...list, {key, name, createdBy:(STATE.login?.empNo||'03250'), createdAt:new Date().toISOString()}];
+  const ok = await window.saveDistricts(list);
+  if(!ok){ showToast('⚠️ 課區清單寫入雲端失敗，請檢查連線','warn'); return; }
+  window._districtList = list;
+  showToast('已建立課區：'+name);
+  await enterDistrict(key, name);
+}
+
+// 進入指定課區（核心：先清監聽器與旗標，再切 key、載入、重啟監聽）
+async function enterDistrict(key, name, opts={}){
+  // ① 退訂舊監聽器（防跨課區交叉污染 / 回寫循環）
+  if(window._cloudUnsub){ try{ window._cloudUnsub(); }catch(e){} window._cloudUnsub = null; }
+  // ② 清旗標（防上一課區的時間戳 / 鎖殘留造成誤判）
+  window._lastSavedAt = '';
+  window._cloudLoadingLock = false;
+
+  ACTIVE_DISTRICT = key;
+  ACTIVE_DISTRICT_NAME = name || key;
+  // ③ 切 key：雲端 key 與本機 key（中壢課維持原值以相容既有備份）
+  if(window.setCloudKey) window.setCloudKey(key);
+  LS_KEY = (key==='schedule') ? 'schedule_system_v1' : ('schedule_system_v1_'+key);
+  try{ localStorage.setItem('active_district', key); }catch(e){}
+
+  STATE.login = {loggedIn:true, empNo:(STATE.login?.empNo||'03250'), role:'admin', name:ACTIVE_DISTRICT_NAME};
+
+  // ④ 先用該課區本機備份快速還原
+  const restoredLocal = loadFromStorage();
+
+  // ⑤ 雲端載入（會自設 _cloudLoadingLock，3 秒後解鎖）
+  let cloudOk = false;
+  if(!opts.localOnly && typeof window.loadFromCloud === 'function'){
+    cloudOk = await window.loadFromCloud();
+  }
+
+  if(!cloudOk && !restoredLocal){
+    // 都沒有資料：中壢課鋪完整預設（向後相容舊行為），其他課區空白+預設班別
+    if(key==='schedule'){ initData(); }
+    else { initBlankDistrict(); }
+    if(!opts.localOnly && typeof window.saveToCloud === 'function'){
+      await window.saveToCloud(false);
+    } else { saveToStorage(); }
+    if(key!=='schedule') showToast('已建立課區資料：'+ACTIVE_DISTRICT_NAME);
+  } else if(!cloudOk && restoredLocal && !opts.localOnly && typeof window.saveToCloud === 'function'){
+    // 有本機、雲端無 → 推上雲端
+    await window.saveToCloud(false);
+  }
+
+  // ⑥ 對新 key 啟動即時監聽
+  if(!opts.localOnly && window.startCloudSync) window.startCloudSync();
+
+  hideDistrictPicker();
+  applyDistrictName();
   showPage('dashboard');
   updateSaveStatus();
+}
 
+// 啟動時決定：進記住的課區，或顯示選擇畫面
+async function bootDistricts(){
+  let list = await window.loadDistricts();
+  if(list === null){
+    // 清單尚未初始化 → 建立含中壢課的清單（指向既有 app/schedule，零搬遷）
+    list = [{key:'schedule', name:'中壢課', createdBy:'03250', createdAt:new Date().toISOString()}];
+    await window.saveDistricts(list);
+  } else if(!list.find(d=>d.key==='schedule')){
+    list = [{key:'schedule', name:'中壢課', createdBy:'03250', createdAt:new Date().toISOString()}, ...list];
+    await window.saveDistricts(list);
+  }
+  window._districtList = list;
+  // 記住的上次課區？
+  let remembered=''; try{ remembered = localStorage.getItem('active_district')||''; }catch(e){}
+  const found = remembered ? list.find(d=>d.key===remembered) : null;
+  if(found){ await enterDistrict(found.key, found.name); }
+  else { renderDistrictPicker(list); }
+}
+
+// ==================== 初始化 ====================
+function _init(){
+  updateSaveStatus();
   // 等待 Firebase module 載入完成（最多 8 秒，每 200ms 輪詢）
   let waited = 0;
   const tryCloud = setInterval(async ()=>{
     waited += 200;
     if(typeof window.saveToCloud === 'function'){
       clearInterval(tryCloud);
-      // Firebase 就緒，嘗試從雲端載入
-      const cloudOk = await window.loadFromCloud();
-      if(cloudOk){
-        showToast('☁️ 已從雲端載入最新班表');
-        showPage(STATE.currentPage || 'dashboard');
-      } else {
-        // 雲端無資料 → 把本機資料推上去
-        const hasLocal = localStorage.getItem('schedule_system_v1');
-        if(hasLocal){
-          console.log('☁️ 雲端無資料，推送本機資料...');
-          await window.saveToCloud(false);
-          showToast('☁️ 本機資料已推送至雲端');
-        }
-      }
-      if(window.startCloudSync) window.startCloudSync();
+      await bootDistricts();
     } else if(waited >= 8000){
       clearInterval(tryCloud);
-      console.warn('Firebase 載入超時，使用本機模式');
+      console.warn('Firebase 載入超時，使用本機模式（中壢課）');
       showToast('⚠️ 雲端連線失敗，使用本機資料', 'warn');
+      // 純本機 fallback：直接進中壢課
+      await enterDistrict('schedule', '中壢課', {localOnly:true});
     }
   }, 200);
 }

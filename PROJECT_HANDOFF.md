@@ -1,5 +1,5 @@
 # 中壢課 自動排班系統 — 專案交接文件
-> 建立日期：2026-06-10　最新版本：v13（三視角細節修正）
+> 建立日期：2026-06-10　最新版本：v14（多課區架構）
 
 ---
 
@@ -13,7 +13,7 @@
 | Firebase 專案 ID | `schedule-af163` |
 | Firebase config | 已填入 index.html（`FIREBASE_CONFIG` 常數，第 174 行） |
 | Firestore 規則 | `allow read, write: if true`（已設定，無需 Auth） |
-| 主程式檔案 | `index.html`（單一檔案，約 4580 行） |
+| 主程式檔案 | `index.html`（單一檔案，約 4774 行） |
 
 ---
 
@@ -35,7 +35,7 @@
 純前端單一 HTML 檔案
 ├── HTML/CSS/JS（無框架）
 ├── localStorage  → 本機自動備份
-├── Firebase Firestore → 雲端同步（多人共用）
+├── Firebase Firestore → 雲端同步（多人共用，多課區各一份文件）
 ├── GitHub Pages  → 靜態托管
 └── GitHub Actions → 推上去自動部署
 ```
@@ -59,6 +59,33 @@
 **防無限循環機制（v9）：**
 - `_lastSavedAt`：在 `setDoc` 之前設定，onSnapshot 收到時比對時間差，< 2 秒視為自己推的
 - `_cloudLoadingLock`：loadFromCloud 期間鎖定，阻止 autoSave 回寫雲端，3 秒後解鎖
+
+### 多課區架構（v14）
+
+每個課區 = 一份獨立 Firestore 文件，互不干擾：
+
+```
+app/_districts            ← 課區索引清單 { list:[{key,name,createdBy,createdAt}] }
+app/schedule              ← 中壢課（主課區，沿用既有資料，零搬遷）
+app/district_<timestamp>  ← 新課區（桃園課 / 桃專門店 / 桃直營店…）
+```
+
+- **CLOUD_KEY 改為可變**（`let` + `window.setCloudKey()`），saveToCloud/loadFromCloud/onSnapshot 皆讀當下值
+- **LS_KEY 也隨課區切換**：中壢課維持 `schedule_system_v1`，其他課區為 `schedule_system_v1_<key>`
+- **進入畫面**：`#district-overlay`（z-index 600），啟動時讀 `app/_districts` 渲染課區卡片 +「新增課區」
+- **記住上次課區**：`localStorage.active_district`，下次啟動直接進入
+- **切換入口**：header「課區」按鈕 → `showDistrictPicker()`
+- **新增課區**：staff/stores/groups 全空白，只保留 5 個全公司通用班別（A/P/O/C/B）
+
+**切換課區的關鍵順序（enterDistrict，防跨課區污染）：**
+1. 退訂舊 `_cloudUnsub`（避免同時監聽兩課區）
+2. 清 `_lastSavedAt=''`、`_cloudLoadingLock=false`（避免上一課區時間戳殘留誤判）
+3. setCloudKey + 改 LS_KEY
+4. loadFromStorage → loadFromCloud → startCloudSync（對新 key）
+
+**已知限制：** `app/_districts` 用簡單讀-改-寫，兩課長同時新增課區可能互蓋（試跑階段機率極低）。
+
+**權限：** 目前 Firestore `allow read,write:if true`、所有課區開放可見可進（試跑階段 OK）。正式上線可接 `LOGIN_ACCOUNTS`/`doLogin()`，依登入課長過濾可見課區（`_districts` 已留 `createdBy` 欄位）。
 
 ---
 
@@ -113,6 +140,7 @@ window.STATE = {
 - [x] 班別 A/P/O/C/B（時數動態依 APOC 計算）
 - [x] 鎖定格機制、特休/開會/訓練重排後保留
 - [x] Firebase 雲端同步（多人共用，防無限循環，v9）
+- [x] 多課區架構（一課一文件、進入畫面、header 切換、新增課區，v14）
 - [x] localStorage 自動持久化
 - [x] Excel 匯出（SheetJS）、PDF 列印
 - [x] GitHub Actions 自動部署

@@ -1,3 +1,29 @@
+# 變更紀錄
+
+## v14 — 多課區架構（2026-06-14）
+
+讓系統從中壢課獨家，擴充為可多課區共用（桃園課、桃專門店、桃直營店…）。
+
+**新增**
+- 進入畫面（`#district-overlay`）：啟動時列出所有課區卡片，可點選進入或新增
+- header「課區」按鈕切換課區；記住上次課區（`localStorage.active_district`）
+- 新增課區：staff/stores/groups 全空白 + 保留 5 個通用班別，課長自行建置
+- 課區索引文件 `app/_districts`；每課區一份獨立 Firestore 文件
+
+**改動（向後相容，中壢課資料零搬遷）**
+- `CLOUD_KEY` const→let + `setCloudKey()`；`LS_KEY` 隨課區切換（中壢課維持原值）
+- `_init` 重寫為「Firebase ready → bootDistricts → 進課區或顯示選擇畫面」
+- header 標題 / nav 總表名稱 / 概覽副標 / 匯出檔名 改為動態課區名（`dn()`）
+- `clearStorage` 依當前課區還原（中壢課完整預設、其他課區空白）
+
+**防跨課區污染（沿用 async-debug 原則）**
+- 切換課區時：先退訂舊 onSnapshot → 清 `_lastSavedAt`/`_cloudLoadingLock` → 再切 key、載入、重啟監聽
+
+**已知限制**
+- `_districts` 讀-改-寫，多人同時新增課區可能互蓋（試跑階段可接受）
+
+---
+
 # 中壢課排班系統 — 版本歷史與 Bug 記錄
 
 ---
