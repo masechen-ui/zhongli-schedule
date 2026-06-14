@@ -4130,10 +4130,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     const blockStart=R;
 
     // 固定欄 - 人員資訊
-    setCell(0,R,cell(`${s.empNo||''}`,C.header,font(true,8),'left'));
-    setCell(1,R,cell(`${s.name}`,C.header,font(true,9),'center'));
-    setCell(2,R,cell(storeLabel,C.header,font(false,7.5),'left'));
+    setCell(0,R,cell(`${s.empNo||''} ${s.name}`,C.header,font(true,9),'left'));
+    setCell(1,R,cell('',C.header));
+    setCell(2,R,cell('',C.header));
     setCell(3,R,cell('星期',C.header,font(true,8),'center'));
+    addMerge(R,R,0,2);
 
     // 日期星期列
     for(let d=1;d<=days;d++){
@@ -4162,10 +4163,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     R++;
 
     // ═══ 列2：班別 (A/P/X/O/假/會/訓) ═══
-    setCell(0,R,cell(`${store?.storeNo||'–'}`,C.rowSub,font(false,8),'center'));
-    setCell(1,R,cell(si+1+'',C.rowSub,font(false,8),'center'));
-    setCell(2,R,cell(store?store.name.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'').substring(0,6):'–',C.rowSub,font(false,8),'left'));
+    setCell(0,R,cell(store?`${store.storeNo||''} ${store.name.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'').substring(0,6)}`:'–',C.rowSub,font(false,8),'left'));
+    setCell(1,R,cell('',C.rowSub));
+    setCell(2,R,cell('',C.rowSub));
     setCell(3,R,cell('班別',C.rowSub,font(true,8),'center'));
+    addMerge(R,R,0,2);
 
     for(let d=1;d<=days;d++){
       const c=sd[d];
@@ -4201,10 +4203,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     R++;
 
     // ═══ 列3：服勤時間 ═══
-    setCell(0,R,cell('',C.rowSub,font(false,8)));
-    setCell(1,R,cell('主別：主'+(si+1),C.rowSub,font(false,7.5),'left'));
+    setCell(0,R,cell(s.role==='leader'?'組長':(notesData['rankLabel']||'主別：主'+(si+1)),C.rowSub,font(false,8),'left'));
+    setCell(1,R,cell('',C.rowSub));
     setCell(2,R,cell('',C.rowSub));
     setCell(3,R,cell('服勤時間',C.rowSub,font(true,7.5),'center'));
+    addMerge(R,R,0,2);
     let rowWorkTotal=0;
     for(let d=1;d<=days;d++){
       const c=sd[d];
@@ -4223,10 +4226,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     R++;
 
     // ═══ 列4：用餐 ═══
-    setCell(0,R,cell('排序：'+(si+1),C.rowSub,font(false,7.5),'left'));
+    setCell(0,R,cell('排序：'+(si+1),C.rowSub,font(false,8),'left'));
     setCell(1,R,cell('',C.rowSub));
     setCell(2,R,cell('',C.rowSub));
     setCell(3,R,cell('用餐',C.rowSub,font(true,7.5),'center'));
+    addMerge(R,R,0,2);
     let mealTotal=0;
     for(let d=1;d<=days;d++){
       const c=sd[d];
@@ -4248,10 +4252,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     R++;
 
     // ═══ 列5：目標/派員/支援 ═══
-    setCell(0,R,cell('目標：'+(store?.target?Number(store.target).toLocaleString():'–'),C.rowSub,font(false,7.5),'left'));
+    setCell(0,R,cell('目標：'+(store?.target?Number(store.target).toLocaleString():''),C.rowSub,font(false,8),'left'));
     setCell(1,R,cell('',C.rowSub));
     setCell(2,R,cell('',C.rowSub));
     setCell(3,R,cell('代班',C.rowSub,font(true,7.5),'center'));
+    addMerge(R,R,0,2);
     for(let d=1;d<=days;d++){
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
@@ -4267,10 +4272,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     R++;
 
     // ═══ 列6：派員 ═══
-    setCell(0,R,cell('派員：'+(store?.staffAlloc||'–'),C.rowSub,font(false,7.5),'left'));
+    setCell(0,R,cell('派員：'+(store?.staffAlloc||'–'),C.rowSub,font(false,8),'left'));
     setCell(1,R,cell('',C.rowSub));
     setCell(2,R,cell('',C.rowSub));
     setCell(3,R,cell('支援',C.rowSub,font(true,7.5),'center'));
+    addMerge(R,R,0,2);
     for(let d=1;d<=days;d++){
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
@@ -4280,10 +4286,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     R++;
 
     // ═══ 列7：備註說明（手填空白行）═══
-    setCell(0,R,cell('王貞文 05-29',{fgColor:{rgb:'FFF8F0'}},font(false,7.5),'left'));
-    setCell(1,R,cell('備註說明',{fgColor:{rgb:'FFF8F0'}},font(true,7.5),'center'));
-    setCell(2,R,cell('預留',{fgColor:{rgb:'FFF8F0'}},font(false,7.5),'center'));
-    setCell(3,R,cell('小盤',{fgColor:{rgb:'FFF8F0'}},font(false,7.5),'center'));
+    setCell(0,R,cell(getGroupName(s.groupId),{fgColor:{rgb:'FFF8F0'}},font(false,8),'left'));
+    setCell(1,R,cell('',{fgColor:{rgb:'FFF8F0'}}));
+    setCell(2,R,cell('',{fgColor:{rgb:'FFF8F0'}}));
+    setCell(3,R,cell('備註說明',{fgColor:{rgb:'FFF8F0'}},font(true,7.5),'center'));
+    addMerge(R,R,0,2);
     // 備註欄：帶入已存備註
     for(let d=1;d<=days;d++){
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
@@ -4295,9 +4302,10 @@ async function exportExcelFormatted(y,m,gid,opts={}){
 
     // ═══ 列8：AP班（空白手填）═══
     setCell(0,R,cell('',C.rowSub));
-    setCell(1,R,cell('AP班',C.rowSub,font(true,7.5),'center'));
+    setCell(1,R,cell('',C.rowSub));
     setCell(2,R,cell('',C.rowSub));
-    setCell(3,R,cell('',C.rowSub));
+    setCell(3,R,cell('AP班',C.rowSub,font(true,7.5),'center'));
+    addMerge(R,R,0,2);
     for(let d=1;d<=days;d++){
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
