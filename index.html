@@ -23,10 +23,10 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
 header{background:var(--text);color:#FFF;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(44,36,32,.18)}
-header h1{font-size:16px;font-weight:500;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
+header h1{font-size:18px;font-weight:500;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
 header h1 span{color:var(--accent2);font-weight:700}
-header h1 svg{width:18px;height:18px;color:var(--accent2)}
-.header-actions{display:flex;gap:8px}
+header h1 svg{width:20px;height:20px;color:var(--accent2)}
+.header-actions{display:flex;align-items:center;gap:8px}
 .btn{padding:7px 15px;border-radius:var(--r-sm);border:1px solid transparent;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;line-height:1.2;white-space:nowrap;transition:transform .08s ease,background .15s,box-shadow .15s,border-color .15s,filter .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px}
 .btn:active{transform:translateY(1px)}
 .btn svg{width:15px;height:15px;flex-shrink:0}
@@ -142,6 +142,17 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .district-card-sub{font-size:12px;color:var(--muted,#999)}
 .district-card-add{border-style:dashed;background:transparent}
 .district-card-plus{font-size:30px;line-height:1;color:var(--primary,#C0392B);font-weight:300}
+.district-card.is-manage{cursor:default}
+.district-card.is-manage:hover{transform:none;box-shadow:none;border-color:var(--border,#E0DAD0)}
+.district-card-tools{position:absolute;top:8px;right:8px;display:flex;gap:6px}
+.dc-tool{font-size:11px;padding:3px 8px;border:1px solid var(--border,#D8D2C8);border-radius:8px;background:var(--bg,#FAF7F2);color:var(--text);cursor:pointer;font-family:inherit;line-height:1.4}
+.dc-tool:hover{border-color:var(--primary,#C0392B);color:var(--primary,#C0392B)}
+.dc-del:hover{border-color:#C0392B;color:#FFF;background:#C0392B}
+.dc-lock{font-size:10px;color:var(--muted,#AAA);align-self:center}
+.district-card{position:relative}
+.district-foot{margin-top:22px}
+.district-link{font-size:13px;color:var(--muted,#888);background:none;border:none;cursor:pointer;padding:6px 10px;font-family:inherit;border-radius:8px}
+.district-link:hover{color:var(--primary,#C0392B);background:rgba(192,57,43,.06)}
 .login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;width:360px;max-width:90vw;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.12)}
 .login-logo{font-size:36px;margin-bottom:8px}
 .login-title{font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px}
@@ -218,7 +229,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 
   if(FB_READY){
     const { initializeApp } = await import("https://cdn.jsdelivr.net/npm/firebase@10.12.0/app/+esm");
-    const { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp }
+    const { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp, deleteDoc }
       = await import("https://cdn.jsdelivr.net/npm/firebase@10.12.0/firestore/+esm");
 
     const app = initializeApp(FIREBASE_CONFIG);
@@ -242,6 +253,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         await setDoc(doc(db, 'app', '_districts'), { list, updatedAt: serverTimestamp() });
         return true;
       }catch(e){ console.warn('saveDistricts 失敗:', e); return false; }
+    };
+    window.deleteDistrictDoc = async function(key){
+      try{ await deleteDoc(doc(db, 'app', key)); return true; }
+      catch(e){ console.warn('deleteDistrictDoc 失敗:', e); return false; }
     };
 
     // ── 雲端儲存：把完整 STATE 推到 Firestore ─────
@@ -356,6 +371,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
     window.getCloudKey   = ()=> 'schedule';
     window.loadDistricts = async ()=> null;
     window.saveDistricts = async ()=> false;
+    window.deleteDistrictDoc = async ()=> false;
     console.info('ℹ️ Firebase 未設定，使用純本機模式（localStorage）');
   }
 </script>
@@ -4626,29 +4642,105 @@ function renderDistrictPicker(list){
   window._districtList = list || [];
   const ol = document.getElementById('district-overlay');
   if(!ol) return;
-  const cards = window._districtList.map((d,i)=>`
-    <button class="district-card" onclick="enterDistrictByIdx(${i})">
+  const manage = !!window._districtManage;
+  const cards = window._districtList.map((d,i)=>{
+    const canDelete = d.key!=='schedule';
+    const tools = manage ? `
+      <div class="district-card-tools">
+        <button class="dc-tool" onclick="event.stopPropagation();renameDistrict('${d.key}')">改名</button>
+        ${canDelete ? `<button class="dc-tool dc-del" onclick="event.stopPropagation();deleteDistrict('${d.key}')">刪除</button>` : `<span class="dc-lock">主課區</span>`}
+      </div>` : '';
+    return `
+    <div class="district-card${manage?' is-manage':''}" onclick="${manage ? '' : `enterDistrictByIdx(${i})`}">
+      ${tools}
       <div class="district-card-name">${_escHtml(d.name)}</div>
       <div class="district-card-sub">${d.key==='schedule'?'主課區':'課區'}</div>
-    </button>`).join('');
+    </div>`;
+  }).join('');
+  const addCard = manage ? '' : `
+    <div class="district-card district-card-add" onclick="createDistrict()">
+      <div class="district-card-plus">＋</div>
+      <div class="district-card-sub">新增課區</div>
+    </div>`;
   ol.innerHTML = `
     <div class="district-picker">
       <h2>選擇課區</h2>
-      <p class="district-hint">點選要進入的課區，或新增一個由其他課長自行建立人員與店家。</p>
+      <p class="district-hint">${manage ? '管理模式：可改名或刪除課區（主課區「中壢課」不可刪除）。' : '點選要進入的課區，或新增一個由其他課長自行建立人員與店家。'}</p>
       <div class="district-grid">
         ${cards}
-        <button class="district-card district-card-add" onclick="createDistrict()">
-          <div class="district-card-plus">＋</div>
-          <div class="district-card-sub">新增課區</div>
-        </button>
+        ${addCard}
+      </div>
+      <div class="district-foot">
+        <button class="district-link" onclick="toggleDistrictManage()">${manage ? '← 完成' : '⚙ 管理課區'}</button>
       </div>
     </div>`;
   ol.style.display='flex';
+}
+function toggleDistrictManage(){ window._districtManage = !window._districtManage; renderDistrictPicker(window._districtList); }
+
+// 課區改名
+async function renameDistrict(key){
+  let list = window._districtList || (await window.loadDistricts()) || [];
+  const d = list.find(x=>x.key===key);
+  if(!d) return;
+  const raw = prompt('課區改名：', d.name);
+  if(raw===null) return;
+  const name = raw.trim();
+  if(!name){ showToast('名稱不可空白','warn'); return; }
+  if(name===d.name) return;
+  if(list.find(x=>x.key!==key && x.name===name)){
+    if(!confirm('已有同名課區「'+name+'」，仍要改嗎？')) return;
+  }
+  d.name = name;
+  const ok = await window.saveDistricts(list);
+  if(!ok){ showToast('⚠️ 寫入雲端失敗','warn'); return; }
+  window._districtList = list;
+  // 改的若是當前課區，同步更新顯示
+  if(key===ACTIVE_DISTRICT){
+    ACTIVE_DISTRICT_NAME = name;
+    if(STATE.login) STATE.login.name = name;
+    applyDistrictName();
+  }
+  showToast('已改名為：'+name);
+  renderDistrictPicker(list);
+}
+
+// 課區刪除（永久刪除該課區雲端文件，雙重確認；主課區不可刪）
+async function deleteDistrict(key){
+  if(key==='schedule'){ showToast('主課區（中壢課）不可刪除','warn'); return; }
+  let list = window._districtList || (await window.loadDistricts()) || [];
+  if(list.length<=1){ showToast('至少需保留一個課區','warn'); return; }
+  const d = list.find(x=>x.key===key);
+  if(!d) return;
+  if(!confirm('確定刪除課區「'+d.name+'」？\n這會永久刪除該課區在雲端的所有班表、人員、店家資料，無法復原。')) return;
+  if(!confirm('再次確認：刪除「'+d.name+'」後資料無法救回。仍要刪除嗎？')) return;
+
+  const delActive = (key===ACTIVE_DISTRICT);
+  // 若刪的是當前課區 → 先退訂監聽並鎖住 autoSave，避免殘留 timer 把文件重新寫回
+  if(delActive){
+    if(window._cloudUnsub){ try{ window._cloudUnsub(); }catch(e){} window._cloudUnsub = null; }
+    window._cloudLoadingLock = true;   // 進入新課區時 enterDistrict 會解鎖
+  }
+
+  const newList = list.filter(x=>x.key!==key);
+  const ok = await window.saveDistricts(newList);
+  if(!ok){
+    window._cloudLoadingLock = false;
+    showToast('⚠️ 課區清單更新失敗，已取消刪除','warn');
+    return;
+  }
+  await window.deleteDistrictDoc(key);                 // 刪 Firestore 文件
+  try{ localStorage.removeItem('schedule_system_v1_'+key); }catch(e){}  // 清該課區本機備份
+  if(delActive){ try{ localStorage.removeItem('active_district'); }catch(e){} }
+  window._districtList = newList;
+  showToast('已刪除課區：'+d.name);
+  renderDistrictPicker(newList);                       // 留在管理模式
 }
 function hideDistrictPicker(){ const ol=document.getElementById('district-overlay'); if(ol) ol.style.display='none'; }
 
 // header「課區」按鈕：回到選擇畫面（不重載頁面，資料留在雲端）
 async function showDistrictPicker(){
+  window._districtManage = false;
   let list = window._districtList;
   if(!list || !list.length){ list = (await window.loadDistricts()) || [{key:'schedule',name:'中壢課'}]; }
   renderDistrictPicker(list);

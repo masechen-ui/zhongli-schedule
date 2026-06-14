@@ -1,5 +1,18 @@
 # 變更紀錄
 
+## v14.2 — 多課區：改名 / 刪除（2026-06-14）
+
+- 選擇畫面新增「⚙ 管理課區」模式：每張課區卡片可**改名**、**刪除**
+- 主課區（中壢課 `app/schedule`）**不可刪除**；刪除採**雙重確認**，永久移除該課區 Firestore 文件與本機備份
+- 刪除「當前所在課區」時：先退訂 onSnapshot + 鎖 `_cloudLoadingLock`，避免殘留 autoSave 把文件重新寫回，回到選擇畫面後再進新課區自動解鎖
+- module 端 import 加入 `deleteDoc`，新增 `window.deleteDistrictDoc()`
+
+## v14.1 — header 介面微調（2026-06-14）
+
+- header 標題字體 16→18px、圖示 18→20px
+- `.header-actions` 加 `align-items:center`，「已同步」提示與按鈕垂直對齊
+
+
 ## v14 — 多課區架構（2026-06-14）
 
 讓系統從中壢課獨家，擴充為可多課區共用（桃園課、桃專門店、桃直營店…）。
