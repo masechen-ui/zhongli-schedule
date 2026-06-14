@@ -4077,26 +4077,21 @@ async function exportExcelFormatted(y,m,gid,opts={}){
   function addMerge(rs,re,cs,ce){merges.push([rs+1,cs+1,re+1,ce+1])}
 
   // 固定欄位數
-  const fixedCols=4; // 人員/店編號、項目 + 2備用
+  const fixedCols=4; // 人員/店編號（合併 col0:col2）、項目(col3)
   const dataCols=days;
-  const statCols=10; // 右側統計
+  const statCols=3; // 右側統計：排班 / 服勤 / 加班（直式 3 欄）
   const totalCols=fixedCols+dataCols+statCols;
+  const stdHours=(days-8)*8; // 月標準工時 = (當月天數-8公休)×8h（雙週變形工時）
 
   // 欄寬設定（套用 ExcelJS；fitToWidth 會再縮放到一頁寬）
   const colWidths=[13,9,7,7];
   for(let d=0;d<days;d++) colWidths.push(4.4);
-  for(let i=0;i<statCols;i++) colWidths.push(i<2?9:7);
+  [11,7,7].forEach(w=>colWidths.push(w)); // 右側 3 統計欄
   colWidths.forEach((w,i)=>{ws.getColumn(i+1).width=w});
 
   // ── 大標題列 ──
   setCell(0,R,cell(`${y}-${pad(m)} ${groupLabel} 班表`,C.title,font(true,14,'FFFFFF'),'center',border()));
   addMerge(R,R,0,totalCols-1);
-  R++;
-
-  // 月標準工時、個人月工時標題
-  const stdHours=160; // 月標準工時
-  setCell(totalCols-statCols,R,cell('月標準工時：'+stdHours+'h',C.statHdr,font(true,9,'2C2420'),'left'));
-  addMerge(R,R,totalCols-statCols,totalCols-1);
   R++;
 
   // ── 每個員工區塊 ──
@@ -4126,10 +4121,30 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     const prevPeriodOT=0; // 上旬加班（預留）
     const workDays=days-offDays-leaveDays-meetDays;
 
-    // ═══ 列1：人員/店編號 + 星期 + 班別 ═══
+    // ═══ 表頭列：人員/店編號 ｜ 項目 ｜ 日期(MM-DD) ｜ 月標準工時 ═══
     const blockStart=R;
+    const sIdx=fixedCols+days;
+    setCell(0,R,cell('人員/店編號',C.statHdr,font(true,8),'center'));
+    setCell(1,R,cell('',C.statHdr));
+    setCell(2,R,cell('',C.statHdr));
+    setCell(3,R,cell('項目',C.statHdr,font(true,8),'center'));
+    addMerge(R,R,0,2);
+    for(let d=1;d<=days;d++){
+      const dow=getDOW(y,m,d);
+      const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
+      const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
+      const weekend=dow===0||dow===6;
+      const fill=weekend?C.weekend:(pidx%2===0?C.period2:C.statHdr);
+      const bdr=isNewP?thickLeft():border();
+      setCell(fixedCols+d-1,R,cell(pad(m)+'-'+pad(d),fill,font(true,7.5),undefined,bdr));
+    }
+    setCell(sIdx,R,cell('月標準工時：'+stdHours+' H',C.statHdr,font(true,8),'center'));
+    setCell(sIdx+1,R,cell('',C.statHdr));
+    setCell(sIdx+2,R,cell('',C.statHdr));
+    addMerge(R,R,sIdx,sIdx+2);
+    R++;
 
-    // 固定欄 - 人員資訊
+    // ═══ 星期列：員編姓名 ｜ 星期 ｜ 週次 ｜ 個人月工時 ═══
     setCell(0,R,cell(`${s.empNo||''} ${s.name}`,C.header,font(true,9),'left'));
     setCell(1,R,cell('',C.header));
     setCell(2,R,cell('',C.header));
@@ -4148,18 +4163,11 @@ async function exportExcelFormatted(y,m,gid,opts={}){
       setCell(fixedCols+d-1,R,cell(dowChar,fill,font(false,8),undefined,bdr));
     }
 
-    // 右側統計標題
-    const sIdx=fixedCols+days;
-    setCell(sIdx,R,  cell('月標準工時',C.statHdr,font(true,8)));
-    setCell(sIdx+1,R,cell('個人月工時',C.statHdr,font(true,8)));
-    setCell(sIdx+2,R,cell('排班',C.statHdr,font(true,8)));
-    setCell(sIdx+3,R,cell('服勤',C.statHdr,font(true,8)));
-    setCell(sIdx+4,R,cell('加班',C.statHdr,font(true,8)));
-    setCell(sIdx+5,R,cell('時數',C.statHdr,font(true,8)));
-    setCell(sIdx+6,R,cell('時數',C.statHdr,font(true,8)));
-    setCell(sIdx+7,R,cell('時數',C.statHdr,font(true,8)));
-    setCell(sIdx+8,R,cell('公休',C.statHdr,font(true,8)));
-    setCell(sIdx+9,R,cell('請假',C.statHdr,font(true,8)));
+    // 右側：個人月工時（合併 3 欄）
+    setCell(sIdx,R,cell('個人月工時：'+totalWork+' H',C.statVal,font(true,8),'center'));
+    setCell(sIdx+1,R,cell('',C.statVal));
+    setCell(sIdx+2,R,cell('',C.statVal));
+    addMerge(R,R,sIdx,sIdx+2);
     R++;
 
     // ═══ 列2：班別 (A/P/X/O/假/會/訓) ═══
@@ -4188,18 +4196,10 @@ async function exportExcelFormatted(y,m,gid,opts={}){
       setCell(fixedCols+d-1,R,cell(code,fill,font(true,9),undefined,bdr));
     }
 
-    // 右側統計值
-    setCell(sIdx,  R,cell(stdHours,C.statVal,font(true,10),'center'));
-    setCell(sIdx+1,R,cell(totalWork,C.statVal,font(true,10),'center'));
-    setCell(sIdx+2,R,cell(workDays+'天',C.statVal,font(false,9),'center'));
-    setCell(sIdx+3,R,cell(totalWork+'h',C.statVal,font(false,9),'center'));
-    const ot=Math.max(0,totalWork-stdHours);
-    setCell(sIdx+4,R,cell(ot>0?ot+'h':'–',C.statVal,font(false,9),'center'));
-    setCell(sIdx+5,R,cell('',C.statVal,font(false,9)));
-    setCell(sIdx+6,R,cell('',C.statVal,font(false,9)));
-    setCell(sIdx+7,R,cell('',C.statVal,font(false,9)));
-    setCell(sIdx+8,R,cell(offDays+'天',C.statVal,font(false,9),'center'));
-    setCell(sIdx+9,R,cell(leaveDays>0?leaveDays+'天':'–',C.statVal,font(false,9),'center'));
+    // 右側：班別列＝統計欄標題（排班 / 服勤 / 加班）
+    setCell(sIdx,  R,cell('排班',C.statHdr,font(true,8),'center'));
+    setCell(sIdx+1,R,cell('服勤',C.statHdr,font(true,8),'center'));
+    setCell(sIdx+2,R,cell('加班',C.statHdr,font(true,8),'center'));
     R++;
 
     // ═══ 列3：服勤時間 ═══
@@ -4220,9 +4220,9 @@ async function exportExcelFormatted(y,m,gid,opts={}){
       if(h) rowWorkTotal+=h;
       setCell(fixedCols+d-1,R,cell(h||'',C.rowSub,font(false,8),undefined,bdr));
     }
-    setCell(sIdx,R,cell(rowWorkTotal||'',C.statVal,font(true,9)));
-    setCell(sIdx+1,R,cell('服勤時數',C.statVal,font(false,8)));
-    for(let i=2;i<statCols;i++)setCell(sIdx+i,R,cell('',C.statVal));
+    setCell(sIdx,R,cell(rowWorkTotal||'',C.statVal,font(true,9),'center'));
+    setCell(sIdx+1,R,cell('時數',C.statVal,font(false,8),'center'));
+    setCell(sIdx+2,R,cell('時數',C.statVal,font(false,8),'center'));
     R++;
 
     // ═══ 列4：用餐 ═══
@@ -4243,12 +4243,9 @@ async function exportExcelFormatted(y,m,gid,opts={}){
       if(h) mealTotal+=h;
       setCell(fixedCols+d-1,R,cell(h||'',C.rowSub,font(false,8),undefined,bdr));
     }
-    setCell(sIdx,R,cell(mealTotal||'',C.statVal,font(true,9)));
-    setCell(sIdx+1,R,cell('用餐時數',C.statVal,font(false,8)));
-    setCell(sIdx+2,R,cell('公休',C.statVal,font(false,8)));
-    setCell(sIdx+3,R,cell(offDays+'天',C.statVal,font(true,9)));
-    setCell(sIdx+4,R,cell(prevPeriodOT+'h',C.statVal,font(false,9)));
-    for(let i=5;i<statCols;i++)setCell(sIdx+i,R,cell('',C.statVal));
+    setCell(sIdx,R,cell(mealTotal||'',C.statVal,font(true,9),'center'));
+    setCell(sIdx+1,R,cell('',C.statVal));
+    setCell(sIdx+2,R,cell('',C.statVal)); // 加班時數總計（手填）
     R++;
 
     // ═══ 列5：目標/派員/支援 ═══
@@ -4265,10 +4262,9 @@ async function exportExcelFormatted(y,m,gid,opts={}){
       const depV=notesData[`dep_${d}`]||(elseStore?elseStore.name.replace(/中壢|平鎮|楊梅|內壢|龍潭/,'').substring(0,4):'');
       setCell(fixedCols+d-1,R,cell(depV,C.rowSub,font(false,8),undefined,isNewP?thickLeft():border()));
     }
-    setCell(sIdx,R,cell('請假',C.statVal,font(false,8)));
-    setCell(sIdx+1,R,cell(leaveDays>0?leaveDays+'天':'–',C.statVal,font(true,9)));
-    setCell(sIdx+2,R,cell(meetDays>0?meetDays+'天':'–',C.statVal,font(false,9)));
-    for(let i=3;i<statCols;i++)setCell(sIdx+i,R,cell('',C.statVal));
+    setCell(sIdx,R,cell('公休',C.statVal,font(false,8),'center'));
+    setCell(sIdx+1,R,cell(offDays,C.statVal,font(true,9),'center'));
+    setCell(sIdx+2,R,cell('',C.statVal)); // 加班分項（手填）
     R++;
 
     // ═══ 列6：派員 ═══
@@ -4282,10 +4278,10 @@ async function exportExcelFormatted(y,m,gid,opts={}){
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
       setCell(fixedCols+d-1,R,cell(notesData[`sup_${d}`]||'',C.rowSub,font(false,8),undefined,isNewP?thickLeft():border()));
     }
-    for(let i=0;i<statCols;i++)setCell(sIdx+i,R,cell('',C.rowSub));
+    setCell(sIdx,R,cell('請假',C.statVal,font(false,8),'center'));
+    setCell(sIdx+1,R,cell(leaveDays||0,C.statVal,font(true,9),'center'));
+    setCell(sIdx+2,R,cell('',C.rowSub)); // 加班分項（手填）
     R++;
-
-    // ═══ 列7：備註說明（手填空白行）═══
     setCell(0,R,cell(getGroupName(s.groupId),{fgColor:{rgb:'FFF8F0'}},font(false,8),'left'));
     setCell(1,R,cell('',{fgColor:{rgb:'FFF8F0'}}));
     setCell(2,R,cell('',{fgColor:{rgb:'FFF8F0'}}));
@@ -4313,26 +4309,22 @@ async function exportExcelFormatted(y,m,gid,opts={}){
     }
     for(let i=0;i<statCols;i++)setCell(sIdx+i,R,cell('',C.rowSub));
     R++;
-
-    // 員工區塊之間空一列分隔
-    R++;
   });
 
   // 列高設定（放大，方便列印）
   const rowHeights={};
   rowHeights[0]={hpt:24}; // 大標題
-  rowHeights[1]={hpt:16};
   staffList.forEach((_,si)=>{
-    const base=2+si*9;
-    rowHeights[base]={hpt:18};   // 星期
-    rowHeights[base+1]={hpt:24}; // 班別
-    rowHeights[base+2]={hpt:19}; // 服勤
-    rowHeights[base+3]={hpt:19}; // 用餐
-    rowHeights[base+4]={hpt:17}; // 代班
-    rowHeights[base+5]={hpt:17}; // 支援
-    rowHeights[base+6]={hpt:19}; // 備註
-    rowHeights[base+7]={hpt:17}; // AP班
-    rowHeights[base+8]={hpt:8};  // 空列
+    const base=1+si*9; // 大標題後，每區塊 9 列相連
+    rowHeights[base]  ={hpt:16}; // 表頭（人員/店編號｜項目｜日期）
+    rowHeights[base+1]={hpt:18}; // 星期
+    rowHeights[base+2]={hpt:24}; // 班別
+    rowHeights[base+3]={hpt:19}; // 服勤時間
+    rowHeights[base+4]={hpt:19}; // 用餐
+    rowHeights[base+5]={hpt:17}; // 代班
+    rowHeights[base+6]={hpt:17}; // 支援
+    rowHeights[base+7]={hpt:19}; // 備註說明
+    rowHeights[base+8]={hpt:17}; // AP班
   });
   Object.entries(rowHeights).forEach(([r,h])=>{ws.getRow(Number(r)+1).height=h.hpt});
   merges.forEach(mg=>{try{ws.mergeCells(mg[0],mg[1],mg[2],mg[3])}catch(e){}});
