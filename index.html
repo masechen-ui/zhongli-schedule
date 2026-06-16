@@ -273,6 +273,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         schedules:        STATE.schedules,
         specialEvents:    STATE.specialEvents,
         staffAssignments: STATE.staffAssignments,
+        staffPrimary:     STATE.staffPrimary || {},
         storeViewNotes:   STATE.storeViewNotes  || {},
         storeShiftTimes:  STATE.storeShiftTimes || {},
         biweeklyAnchor:   STATE.biweeklyAnchor,
@@ -310,6 +311,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
         if(data.schedules)        STATE.schedules        = data.schedules;
         if(data.specialEvents)    STATE.specialEvents    = data.specialEvents;
         if(data.staffAssignments) STATE.staffAssignments = data.staffAssignments;
+        if(data.staffPrimary)     STATE.staffPrimary     = data.staffPrimary;
         if(data.storeViewNotes)   STATE.storeViewNotes   = data.storeViewNotes;
         if(data.storeShiftTimes)  STATE.storeShiftTimes  = data.storeShiftTimes;
         if(data.biweeklyAnchor)   STATE.biweeklyAnchor   = data.biweeklyAnchor;
@@ -471,6 +473,7 @@ window.STATE={
   currentMonth:new Date().getMonth()+1,
   staff:[],stores:[],schedules:{},specialEvents:[],shifts:[],
   staffAssignments:{},
+  staffPrimary:{},
   biweeklyAnchor:'2025-07-06',
   biweeklyOverrides:{},
   login:{loggedIn:false,empNo:'',role:'guest'},
@@ -660,7 +663,7 @@ function initData(){
   };
   if(!STATE.storeShiftTimes) STATE.storeShiftTimes={};
 
-  STATE.schedules={};STATE.specialEvents=[];STATE.staffAssignments={};
+  STATE.schedules={};STATE.specialEvents=[];STATE.staffAssignments={};STATE.staffPrimary={};
 }
 
 // ==================== 工具 ====================
@@ -907,6 +910,22 @@ function getStoreHoursStatus(y, m){
 }
 function getAssignedStores(sid){return STATE.staffAssignments[sid]||[]}
 function setAssignedStores(sid,storeIds){STATE.staffAssignments[sid]=storeIds}
+// ── [v14.6] 主店（當店負責人）：明確指定每人的主店 ──
+// 解決「指派陣列順序不可靠」造成的主力/副手誤判（如麥蒨云在巴斯是主、卻被當副手）。
+// 向後相容：未設主店時，單店指派人＝該店為主店；多店指派人未設主店則回傳 null
+// （＝舊版「多店＝副手」行為，故未設定前現況排班完全不變）。
+function getPrimaryStore(sid){
+  const p=STATE.staffPrimary?.[sid];
+  const assigns=getAssignedStores(sid);
+  if(p&&assigns.includes(p)) return p;
+  if(assigns.length===1) return assigns[0];
+  return null;
+}
+function setPrimaryStore(sid, storeId){
+  if(!STATE.staffPrimary) STATE.staffPrimary={};
+  if(storeId) STATE.staffPrimary[sid]=storeId;
+  else delete STATE.staffPrimary[sid];
+}
 
 // ==================== 自動排班 ====================
 
@@ -1197,8 +1216,24 @@ function autoScheduleGroup(y,m,gid){
     storeHoursCap[st.id]=storeHoursLimit(st.staffAlloc, days); // (月天數-8)×8h×派員
   });
 
-  // ⑦ 排每天班別
-  for(let d=1;d<=days;d++){
+  // ⑦ 排每天班別 — [修正L·v14.7] 六日優先填班
+  // 每個雙週「先排六日、再排平日」，讓主力先把工時投在最需要人的六日；
+  // 工時不足的缺口自然落到平日，不再發生期末六日因工時上限用罄而整片空格
+  // （根治 SOGO睡衣 15/16/29/30 兩人同時空格）。
+  // 重要：原本用日曆天 d 當「月進度」的兩處配速（allowedByPace、storeQuotaToday）
+  // 改用 progress（已處理天數），否則天序重排後配速會錯亂。
+  const dayOrder=[];
+  periods.forEach(p=>{
+    const pdays=(p.days||[]).filter(dd=>dd>=1&&dd<=days);
+    const wePart=pdays.filter(dd=>{const w=getDOW(y,m,dd);return w===0||w===6;});
+    const wdPart=pdays.filter(dd=>{const w=getDOW(y,m,dd);return !(w===0||w===6);});
+    dayOrder.push(...wePart,...wdPart);
+  });
+  for(let dd=1;dd<=days;dd++){ if(!dayOrder.includes(dd)) dayOrder.push(dd); } // 保險：補齊未涵蓋天
+
+  let progress=0;
+  for(const d of dayOrder){
+    progress++;
     const dow=getDOW(y,m,d);
     const weekend=dow===0||dow===6;
     const wk=Math.floor((d-1)/7);
@@ -1239,7 +1274,7 @@ function autoScheduleGroup(y,m,gid){
         const budget=staffMonthBudget[s.id]?.[storeId];
         if(budget!=null){
           const used=staffStoreDays[s.id]?.[storeId]||0;
-          const allowedByPace=Math.ceil(budget*d/days); // 按月進度配速
+          const allowedByPace=Math.ceil(budget*progress/days); // [v14.7] 按已處理天數配速（天序已重排）
           if(used>=Math.min(budget, allowedByPace)) return false;
         }
         return true;
@@ -1264,10 +1299,12 @@ function autoScheduleGroup(y,m,gid){
       //   多店指派人 = 副手，只在主力公休日才過來代班
       // 這是人工排班最核心的模式，所有 staffAlloc=1.5 的店都是這樣排的。
 
-      // 識別此店的主力（單店指派）和副手（多店指派）
-      const storePrimary=fixedPool.filter(s=>getAssignedStores(s.id).length===1);
+      // ── [v14.6] 識別此店的主力（主店＝本店）與副手（配班）──
+      // 改用明確「主店」判斷，取代舊的「指派陣列長度===1」proxy，
+      // 根治多店指派的當店負責人（如麥蒨云@巴斯）被誤判成副手的排序錯誤。
+      const storePrimary=fixedPool.filter(s=>getPrimaryStore(s.id)===store.id);
       const storeSecondary=[
-        ...fixedPool.filter(s=>getAssignedStores(s.id).length>1),
+        ...fixedPool.filter(s=>getPrimaryStore(s.id)!==store.id),
         ...otherPool
       ];
 
@@ -1293,8 +1330,9 @@ function autoScheduleGroup(y,m,gid){
         const pool=[...fixedPool,...otherPool];
         // 排序：單店指派優先，再比派遣次數，再比工時落後
         pool.sort((a,b)=>{
-          const aMulti=getAssignedStores(a.id).length>1?1:0;
-          const bMulti=getAssignedStores(b.id).length>1?1:0;
+          // [v14.6] 主店為本店者（當店負責人）排前，配班在後
+          const aMulti=getPrimaryStore(a.id)===store.id?0:1;
+          const bMulti=getPrimaryStore(b.id)===store.id?0:1;
           if(aMulti!==bMulti) return aMulti-bMulti;
           return ((storeAssigned[store.id][a.id]||0)-(storeAssigned[store.id][b.id]||0))||
                  ((periodWorkedH[a.id]?.[pidx]||0)-(periodWorkedH[b.id]?.[pidx]||0));
@@ -1312,7 +1350,7 @@ function autoScheduleGroup(y,m,gid){
         storeHoursUsed[store.id]+=getCellWorkH(ms[s.id][d],store,dow);
       });
       // 本店今日時數配額 = 月上限 × 進度（已過天數/全月天數）
-      const storeQuotaToday=storeHoursCap[store.id]*d/days;
+      const storeQuotaToday=storeHoursCap[store.id]*progress/days; // [v14.7] 改用已處理天數（天序已重排）
 
       // 計算今天此店確定出勤總人數
       const totalOut=alreadyHere.length+toAssign.length;
@@ -1954,10 +1992,10 @@ function renderStoreView(){
   const staffAtStore=STATE.staff.filter(s=>
     Object.values(ms[s.id]||{}).some(c=>c&&c.type==='work'&&c.storeId===store.id)
   );
-  // 主別排序：主店（指派清單第一個店）為本店者＝主力排前，其餘＝副手在後
+  // [v14.6] 主別排序：主店為本店者＝主力排前，其餘＝副手在後
   staffAtStore.sort((a,b)=>{
-    const aP=getAssignedStores(a.id)[0]===store.id?0:1;
-    const bP=getAssignedStores(b.id)[0]===store.id?0:1;
+    const aP=getPrimaryStore(a.id)===store.id?0:1;
+    const bP=getPrimaryStore(b.id)===store.id?0:1;
     return aP-bP;
   });
 
@@ -2898,7 +2936,8 @@ function renderAssignGroup(groupId){
     <thead><tr><th>人員</th><th>指派店家</th><th>操作</th></tr></thead>
     <tbody>${staff.map(s=>{
       const assigns=getAssignedStores(s.id);
-      const storeNames=assigns.map(id=>{const st=STATE.stores.find(x=>x.id===id);return st?`<span class="assign-tag">${st.name.substring(0,6)}</span>`:''}).join('');
+      const prim=getPrimaryStore(s.id);
+      const storeNames=assigns.map(id=>{const st=STATE.stores.find(x=>x.id===id);if(!st)return '';const isP=(id===prim);return `<span class="assign-tag"${isP?' style="font-weight:700;color:var(--accent);border-color:var(--accent)"':''}>${isP?'★':''}${st.name.substring(0,6)}</span>`;}).join('');
       return `<tr>
         <td><strong>${s.name}</strong>${s.role==='leader'?'<span class="badge badge-leader" style="font-size:9px;margin-left:4px">組</span>':''}</td>
         <td>${assigns.length?storeNames:'<span style="color:var(--text2);font-size:12px">未指派（彈性）</span>'}</td>
@@ -2916,16 +2955,22 @@ function openAssignModal(staffId){
   showModal(`
   <div class="modal">
     <div class="modal-title">🔗 設定固定指派 — ${s.name}</div>
-    <div class="alert alert-info">可選多間店家。系統排班時此員工優先安排至勾選的店。</div>
+    <div class="alert alert-info">勾選此員工固定服務的店家，並指定一間「主店」（當店負責人）。主店決定排班時的主力／配班角色與六日優先。純配班同仁可選「無主店」。</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
       ${groupStores.map(st=>`
-        <label style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-          <input type="checkbox" value="${st.id}" ${assigns.includes(st.id)?'checked':''} style="width:16px;height:16px">
-          <div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:6px">
+          <input type="checkbox" class="assign-chk" value="${st.id}" ${assigns.includes(st.id)?'checked':''} style="width:16px;height:16px">
+          <div style="flex:1">
             <div style="font-weight:600;font-size:13px">${st.name}</div>
             <div style="font-size:11px;color:var(--text2)">${BRAND_NAMES[st.brand]||st.brand} · ${CHANNEL_NAMES[st.channel]||''} · 派員${st.staffAlloc}</div>
           </div>
-        </label>`).join('')}
+          <label style="font-size:11px;display:flex;align-items:center;gap:4px;color:var(--accent);cursor:pointer;white-space:nowrap">
+            <input type="radio" name="primaryStore" class="assign-primary" value="${st.id}" ${getPrimaryStore(staffId)===st.id?'checked':''}>★主店
+          </label>
+        </div>`).join('')}
+      <label style="font-size:11px;display:flex;align-items:center;gap:6px;color:var(--text2);cursor:pointer;padding:4px 8px">
+        <input type="radio" name="primaryStore" class="assign-primary" value="" ${!getPrimaryStore(staffId)?'checked':''}>無主店（純配班，只在他店配班支援）
+      </label>
     </div>
     <div class="form-actions">
       <button class="btn btn-outline" onclick="closeModal()">取消</button>
@@ -2935,9 +2980,13 @@ function openAssignModal(staffId){
 }
 
 function saveAssign(staffId){
-  const checks=document.querySelectorAll('#modal-container input[type=checkbox]:checked');
+  const checks=document.querySelectorAll('#modal-container input.assign-chk:checked');
   const ids=Array.from(checks).map(c=>c.value);
   setAssignedStores(staffId,ids);
+  // [v14.6] 主店：只在該店有勾選時才採用，否則視為無主店
+  const primRadio=document.querySelector('#modal-container input.assign-primary:checked');
+  const prim=primRadio?primRadio.value:'';
+  setPrimaryStore(staffId, (prim&&ids.includes(prim))?prim:'');
   closeModal();
   showPage('assign');
 }
@@ -4402,6 +4451,7 @@ function saveToStorage(){
       schedules: STATE.schedules,
       specialEvents: STATE.specialEvents,
       staffAssignments: STATE.staffAssignments,
+      staffPrimary: STATE.staffPrimary||{},
       groups: STATE.groups,
       biweeklyAnchor: STATE.biweeklyAnchor,
       biweeklyOverrides: STATE.biweeklyOverrides,
@@ -4440,6 +4490,7 @@ function loadFromStorage(){
     STATE.schedules=data.schedules;
     STATE.specialEvents=data.specialEvents||[];
     STATE.staffAssignments=data.staffAssignments||{};
+    STATE.staffPrimary=data.staffPrimary||{};
     STATE.biweeklyAnchor=data.biweeklyAnchor||'2025-07-06';
     STATE.biweeklyOverrides=data.biweeklyOverrides||{};
     STATE.storeViewNotes=data.storeViewNotes||{};
@@ -4569,6 +4620,7 @@ function importJSON(){
           STATE.schedules=data.schedules;
           STATE.specialEvents=data.specialEvents||[];
           STATE.staffAssignments=data.staffAssignments||{};
+          STATE.staffPrimary=data.staffPrimary||{};
           STATE.biweeklyAnchor=data.biweeklyAnchor||'2025-07-06';
           STATE.biweeklyOverrides=data.biweeklyOverrides||{};
           STATE.storeViewNotes=data.storeViewNotes||{};
@@ -4660,7 +4712,7 @@ function applyDistrictName(){
 // 全新（空白）課區的起始資料：staff/stores/groups 全空，只保留 5 個全公司通用班別
 function initBlankDistrict(){
   STATE.staff=[]; STATE.stores=[]; STATE.groups=[];
-  STATE.schedules={}; STATE.specialEvents=[]; STATE.staffAssignments={};
+  STATE.schedules={}; STATE.specialEvents=[]; STATE.staffAssignments={}; STATE.staffPrimary={};
   STATE.storeViewNotes={}; STATE.storeShiftTimes={};
   STATE.shifts=getDefaultShifts();
   STATE.biweeklyAnchor='2025-07-06';
