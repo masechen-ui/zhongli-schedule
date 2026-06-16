@@ -807,6 +807,13 @@ function toMin(timeStr){
   return h*60+(m||0);
 }
 
+// ── [v15] 預排標準班：法規 8h 骨架 ──
+// 全公司常數，與各店開閉店脫鉤（多課區模板共用）。
+// 自動排出的 A/P/O 一律以「服勤8h + 用餐1h」計，保證雙週10工作天=80h、4公休/雙週合法。
+// 凡超出 8h 的真實時數（10~11h）由組長手動微調為加班；B/C 等非標準班不套用。
+const STD_SHIFT_H = 8;   // 預排標準服勤時數
+const STD_MEAL_H  = 1;   // 預排標準用餐時數
+
 // ★ 核心：動態計算某店某班某天的服勤時數和用餐時數
 // store: 店家物件；shiftCode: 'A'|'P'|'O'|'C'；dow: 0-6（0=日）
 // 回傳 { workH, mealH } 均為小數（如 8.5, 0.5）
@@ -840,8 +847,10 @@ function calcShiftHours(store, shiftCode, dow){
 // c: CellData；store: 店家物件；dow: 0-6
 function getCellWorkH(c, store, dow){
   if(!c||c.type!=='work') return 0;
-  // 若有手動覆寫時數，優先用手動值
+  // 若有手動覆寫時數，優先用手動值（組長加減班）
   if(c.customHours!=null) return c.customHours;
+  // [v15] 預排標準班：固定 8h，與開閉店脫鉤
+  if(c.std) return STD_SHIFT_H;
   const sh=STATE.shifts.find(x=>x.id===c.shiftId);
   if(!sh) return 0;
   if(!store) return 0;
@@ -852,6 +861,8 @@ function getCellWorkH(c, store, dow){
 function getCellMealH(c, store, dow){
   if(!c||c.type!=='work') return 0;
   if(c.customMeal!=null) return c.customMeal;
+  // [v15] 預排標準班：固定 1h 用餐
+  if(c.std) return STD_MEAL_H;
   const sh=STATE.shifts.find(x=>x.id===c.shiftId);
   if(!sh) return 0;
   if(!store) return 0;
@@ -1422,7 +1433,7 @@ function autoScheduleGroup(y,m,gid){
         }
 
         let shiftObj=STATE.shifts.find(x=>x.code===shiftCode)||STATE.shifts[0];
-        let cell={type:'work',storeId:store.id,shiftId:shiftObj?.id||'s1'};
+        let cell={type:'work',storeId:store.id,shiftId:shiftObj?.id||'s1',std:true}; // [v15] 預排標準8h
         let actualHours=getCellWorkH(cell,store,dow);
 
         // ── [修正H·v8] 雙週80h硬上限防護：排下去會超標就改短班，仍超標就跳過 ──
@@ -1431,7 +1442,7 @@ function autoScheduleGroup(y,m,gid){
           if(hasPShift&&shiftCode!=='P'){
             const pObj=STATE.shifts.find(x=>x.code==='P');
             if(pObj){
-              const pCell={type:'work',storeId:store.id,shiftId:pObj.id};
+              const pCell={type:'work',storeId:store.id,shiftId:pObj.id,std:true}; // [v15] 預排標準8h
               const pH=getCellWorkH(pCell,store,dow);
               if(curPeriodH+pH<=periodMaxH){
                 shiftObj=pObj; cell=pCell; actualHours=pH;
@@ -1464,7 +1475,7 @@ function autoScheduleGroup(y,m,gid){
             const oObj=STATE.shifts.find(x=>x.code==='O');
             if(oObj){
               const oldH=getCellWorkH(c,store,dow);
-              const oCell={type:'work',storeId:store.id,shiftId:oObj.id};
+              const oCell={type:'work',storeId:store.id,shiftId:oObj.id,std:true}; // [v15] 預排標準8h
               const oH=getCellWorkH(oCell,store,dow);
               const curH=periodWorkedH[lone.id]?.[pidx]||0;
               // 換成O班不會超過雙週上限才換
