@@ -1103,18 +1103,42 @@ function autoScheduleGroup(y,m,gid){
       });
       if(available.length===0) return;
 
-      // [v10修正] 均勻分布：每人選公休前排除已被同店其他人選走的天
-      // 避免三人同天休，canTakeOff 擋住後排的人導致公休排不滿
-      const offDays=[];
-      const total=available.length;
-      for(let i=0;i<needOff;i++){
-        const idx=Math.floor((i+0.5)*(total/(needOff)));
-        const target=available[Math.min(idx, total-1)];
-        if(!offDays.includes(target)) offDays.push(target);
+      // ── [修正K·v11] 六日優先排班：公休優先排平日，保留六日人力 ──
+      // 核心條例：一週內六日最需要人，故公休盡量避開六日。
+      // 把可休天拆成「平日池」「六日池」，公休先填平日（仍維持均勻分布
+      // 避免群聚），平日不夠才溢出到六日補滿。後段「連上6天強制休」保險
+      // 仍會接手，不會違反勞基法連班/最低公休規定。
+      const isWeekendDay=dd=>{const w=getDOW(y,m,dd);return w===0||w===6;};
+      const availWeekday=available.filter(dd=>!isWeekendDay(dd));
+      const availWeekend=available.filter(dd=>isWeekendDay(dd));
+
+      // 在指定可休天池內做「等分中點」均勻取 n 天（沿用修正C演算法）
+      function pickEvenOff(pool, n){
+        const picked=[];
+        const total=pool.length;
+        if(total===0||n<=0) return picked;
+        for(let i=0;i<n;i++){
+          const idx=Math.floor((i+0.5)*(total/n));
+          const t=pool[Math.min(idx, total-1)];
+          if(!picked.includes(t)) picked.push(t);
+        }
+        // 去重後可能不足 → 依序補滿
+        for(let i=0;i<total&&picked.length<n;i++){
+          if(!picked.includes(pool[i])) picked.push(pool[i]);
+        }
+        return picked;
       }
-      // 若數量不足，補在未選的空位
-      for(let i=0;i<available.length&&offDays.length<needOff;i++){
-        if(!offDays.includes(available[i])) offDays.push(available[i]);
+
+      const offDays=[];
+      // ① 公休優先填平日（均勻分布）
+      pickEvenOff(availWeekday, needOff).forEach(t=>{
+        if(!offDays.includes(t)) offDays.push(t);
+      });
+      // ② 平日不足才溢出到六日補滿
+      if(offDays.length<needOff){
+        pickEvenOff(availWeekend, needOff-offDays.length).forEach(t=>{
+          if(!offDays.includes(t)) offDays.push(t);
+        });
       }
       offDays.forEach(d=>{ms[s.id][d]={type:'off'}});
     });
@@ -1134,17 +1158,23 @@ function autoScheduleGroup(y,m,gid){
         // 只有已排班格才算連班
         consecutive++;
         if(consecutive>=6){
-          // 往後找第一個空格插公休
+          // [修正K·v11] 往後找空格插公休，同樣「平日優先」保留六日人力：
+          // 先掃平日空格，找不到才退而求其次用六日空格。
           let inserted=false;
-          for(let dd=d;dd<=days&&!inserted;dd++){
-            if(!ms[s.id]?.[dd]){
+          const tryInsert=weekendOnly=>{
+            for(let dd=d;dd<=days&&!inserted;dd++){
+              if(ms[s.id]?.[dd]) continue;
+              const w=getDOW(y,m,dd), isWe=(w===0||w===6);
+              if(weekendOnly!==isWe) continue;
               if(canTakeOff(s.id,dd)){
                 ms[s.id][dd]={type:'off'};
                 consecutive=0;
                 inserted=true;
               }
             }
-          }
+          };
+          tryInsert(false);          // ① 先找平日空格
+          if(!inserted) tryInsert(true); // ② 平日無空格才用六日
         }
       } else {
         // 空格：重置連班計數
