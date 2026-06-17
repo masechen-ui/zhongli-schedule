@@ -811,8 +811,10 @@ function toMin(timeStr){
 // 全公司常數，與各店開閉店脫鉤（多課區模板共用）。
 // 自動排出的 A/P/O 一律以「服勤8h + 用餐1h」計，保證雙週10工作天=80h、4公休/雙週合法。
 // 凡超出 8h 的真實時數（10~11h）由組長手動微調為加班；B/C 等非標準班不套用。
-const STD_SHIFT_H = 8;   // 預排標準服勤時數
-const STD_MEAL_H  = 1;   // 預排標準用餐時數
+const STD_SHIFT_H = 8;   // 預排標準「淨」服勤時數（餵 80h 上限／個人月工時）
+const STD_MEAL_H  = 1;   // 預排標準用餐時數（fallback）
+// [v15.1] 標準用餐依 channel：百貨1／專櫃0.5／其他1（在店 = 淨8 + 用餐）
+function stdMealForStore(store){ return (store&&store.channel==='counter') ? 0.5 : 1; }
 
 // ★ 核心：動態計算某店某班某天的服勤時數和用餐時數
 // store: 店家物件；shiftCode: 'A'|'P'|'O'|'C'；dow: 0-6（0=日）
@@ -861,12 +863,19 @@ function getCellWorkH(c, store, dow){
 function getCellMealH(c, store, dow){
   if(!c||c.type!=='work') return 0;
   if(c.customMeal!=null) return c.customMeal;
-  // [v15] 預排標準班：固定 1h 用餐
-  if(c.std) return STD_MEAL_H;
+  // [v15.1] 預排標準班用餐：依 channel（百貨1／專櫃0.5）
+  if(c.std) return store?stdMealForStore(store):STD_MEAL_H;
   const sh=STATE.shifts.find(x=>x.id===c.shiftId);
   if(!sh) return 0;
   if(!store) return 0;
   return calcShiftHours(store, sh.code, dow).mealH;
+}
+
+// [v15.1] 在店時數 = 淨服勤 + 用餐。乙案：日格與列印的「服勤」欄顯示在店（組長熟悉的人工班表慣例）。
+// 注意：此函式只供「顯示」用；餵 80h 法規上限與個人月工時的永遠是 getCellWorkH（淨工時）。
+function getCellInStoreH(c, store, dow){
+  if(!c||c.type!=='work') return 0;
+  return getCellWorkH(c,store,dow) + getCellMealH(c,store,dow);
 }
 
 // 計算某人某月總服勤時數
@@ -2100,7 +2109,7 @@ function renderStoreView(){
       const bl=isNewP?'border-left:3px solid var(--accent);':'';
       if(c&&c.type==='work'&&c.storeId===store.id){
         const sh=STATE.shifts.find(x=>x.id===c.shiftId);
-        const stx3=STATE.stores.find(q=>q.id===c?.storeId);const dwx3=getDOW(y,m,d);const h=getCellWorkH(c,stx3,dwx3);
+        const stx3=STATE.stores.find(q=>q.id===c?.storeId);const dwx3=getDOW(y,m,d);const h=getCellInStoreH(c,stx3,dwx3);
         workTimeCells.push(`<td style="${bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${h}</td>`);
       } else {
         workTimeCells.push(`<td style="${bl}background:#F9F9F9;padding:2px"></td>`);
@@ -2210,7 +2219,7 @@ function renderStoreView(){
               <td style="${tdFixL}">${rankLabel}</td>
               <td style="${tdFixM}">服勤時間</td>
               ${workTimeCells.join('')}
-              <td style="background:#EEF8EE;font-size:12px;font-weight:700;padding:3px 6px;text-align:center;border:1px solid var(--border)">${workH}</td>
+              <td style="background:#EEF8EE;font-size:12px;font-weight:700;padding:3px 6px;text-align:center;border:1px solid var(--border)">${(workH+mealH)}</td>
             </tr>
             <tr>
               <td style="${tdFixL}">排序：${si+1}</td>
@@ -2416,7 +2425,7 @@ function renderStaffView(){
   const dateRow=dCells.map(x=>`<th style="min-width:26px;font-size:9px;background:${x.bg};${x.bl}padding:2px 1px;text-align:center">${m.toString().padStart(2,'0')}-${x.d.toString().padStart(2,'0')}</th>`).join('');
   const shiftRow=dCells.map(x=>`<td class="${x.shiftCls}" onclick="openCellEdit('${s.id}',${x.d},${y},${m},'staff-view')" title="點擊修改班別" style="${x.bl}cursor:pointer;text-align:center;font-size:11px;font-weight:700;padding:2px">${x.code}</td>`).join('');
   const workRow=dCells.map(x=>{
-    if(x.c?.type==='work'){const stxa=STATE.stores.find(q=>q.id===x.c.storeId);const dwxa=getDOW(y,m,x.d);const ha=getCellWorkH(x.c,stxa,dwxa);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${ha}</td>`;}
+    if(x.c?.type==='work'){const stxa=STATE.stores.find(q=>q.id===x.c.storeId);const dwxa=getDOW(y,m,x.d);const ha=getCellInStoreH(x.c,stxa,dwxa);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${ha}</td>`;}
     return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">–</td>`;
   }).join('');
   const mealRow=dCells.map(x=>{const mSt=STATE.stores.find(q=>q.id===x.c?.storeId);const mH=getCellMealH(x.c,mSt,x.dow);return `<td style="${x.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${mH||''}</td>`;}).join('');
@@ -2495,7 +2504,7 @@ function renderStaffView(){
           <td style="font-size:10px;padding:3px 8px">主別：主1</td>
           <td style="font-size:10px;padding:3px 6px;background:var(--surface2);font-weight:600">服勤時間</td>
           ${workRow}
-          <td style="background:#EEF8EE;font-size:11px;font-weight:700;padding:3px 6px;text-align:center">${workH}</td>
+          <td style="background:#EEF8EE;font-size:11px;font-weight:700;padding:3px 6px;text-align:center">${(workH+mealH)}</td>
         </tr>
         <tr>
           <td style="font-size:10px;padding:3px 8px"></td>
@@ -2588,7 +2597,7 @@ function renderPersonBlock(s, y, m, opts){
     else if(c.type==='work'){const sh=STATE.shifts.find(x=>x.id===c.shiftId);code=sh?.code||'?';bg=code==='A'?'var(--shift-a)':code==='P'?'var(--shift-p)':code==='O'?'var(--shift-o)':code==='B'?'var(--shift-b)':code==='C'?'var(--shift-c)':'var(--shift-work)';}
     shiftCells.push(`<td${cls} style="${mt.bl}text-align:center;font-size:11px;font-weight:700;${bg?`background:${bg};`:''}padding:2px">${code}</td>`);
     if(c&&c.type==='work'){const stx=STATE.stores.find(q=>q.id===c.storeId);const dw=getDOW(y,m,d);
-      wtCells.push(`<td style="${mt.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${getCellWorkH(c,stx,dw)}</td>`);
+      wtCells.push(`<td style="${mt.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${getCellInStoreH(c,stx,dw)}</td>`);
       mealCells.push(`<td style="${mt.bl}text-align:center;font-size:11px;background:#F9F9F9;padding:2px">${getCellMealH(c,stx,dw)||''}</td>`);
     } else { wtCells.push(`<td style="${mt.bl}background:#F9F9F9;padding:2px"></td>`); mealCells.push(`<td style="${mt.bl}background:#F9F9F9;padding:2px"></td>`); }
     const dep=notesData[`dep_${d}`]||'',sup=notesData[`sup_${d}`]||'',nt=notesData[`note_${d}`]||'',ap=notesData[`ap_${d}`]||'';
@@ -2619,7 +2628,7 @@ function renderPersonBlock(s, y, m, opts){
         <tbody>
           <tr><td style="${L}">${store?`${store.storeNo} ${store.name}`:'—'}</td><td style="${M}">星期</td>${dowCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;white-space:nowrap;border:1px solid var(--border)">個人月工時：${workH} H</td></tr>
           <tr><td style="${L}">${s.empNo} ${s.name}${statusTag}</td><td style="${M}">班別</td>${shiftCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;border:1px solid var(--border)"><div style="display:flex;gap:8px"><span>排班</span><span>服勤</span><span>加班</span></div></td></tr>
-          <tr><td style="${L}">${rankLabel}</td><td style="${M}">服勤時間</td>${wtCells.join('')}<td style="background:#EEF8EE;font-size:12px;font-weight:700;padding:3px 6px;text-align:center;border:1px solid var(--border)">${workH}</td></tr>
+          <tr><td style="${L}">${rankLabel}</td><td style="${M}">服勤時間</td>${wtCells.join('')}<td style="background:#EEF8EE;font-size:12px;font-weight:700;padding:3px 6px;text-align:center;border:1px solid var(--border)">${(workH+mealH)}</td></tr>
           <tr><td style="${L}">工作 ${workDays}天</td><td style="${M}">用餐</td>${mealCells.join('')}<td style="background:#EEF8EE;font-size:12px;font-weight:700;padding:3px 6px;text-align:center;border:1px solid var(--border)">${mealH}</td></tr>
           <tr><td style="${L}">目標：${store&&store.target?Number(store.target).toLocaleString():''}</td><td style="${M}">代班</td>${depCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;text-align:center;border:1px solid var(--border)">${depCount?`<strong>${depCount}次</strong>`:''}</td></tr>
           <tr><td style="${L}">派員：${store?store.staffAlloc:''}</td><td style="${M}">支援</td>${supCells.join('')}<td style="background:#FFF8F0;font-size:10px;padding:3px 6px;text-align:center;border:1px solid var(--border)">${supCount?`<strong>${supCount}次</strong>`:''}</td></tr>
@@ -2684,7 +2693,7 @@ function renderCell(c,staffId,day,y,m,borderStyle=''){
     const cls=shiftCellClass(code);
     const locked=c.locked?'cell-locked':'';
     const dow2=getDOW(y,m,day);
-    const workH=getCellWorkH(c,st,dow2);
+    const workH=getCellInStoreH(c,st,dow2); // [v15.1] 顯示在店（80h上限另用 calcPeriodHours 淨工時）
     const isCustomH=c.customHours!=null;
     // 加班警示：計算此人此雙週累計工時，超過80h標橘色邊框
     const periods=getBiweeklyPeriods(y,m);
@@ -2717,8 +2726,10 @@ function openCellEdit(staffId,day,y,m,returnPage){
   const selShift=STATE.shifts.find(x=>x.id===c.shiftId);
   const dow=getDOW(y,m,day);
   const autoCalc=selStore&&selShift?calcShiftHours(selStore,selShift.code,dow):{workH:'',mealH:''};
-  const defaultWorkH=c.customHours!=null?c.customHours:(autoCalc.workH||'');
-  const defaultMealH=c.customMeal!=null?c.customMeal:(autoCalc.mealH||'');
+  // [v15.1] 服勤欄顯示在店（=淨+餐）。預設帶此格目前有效在店值，組長從此調整；存檔時自動換回淨工時
+  // 用餐預設與在店同源（getCellMealH），避免 std 專櫃在店8.5卻配餐1的不一致
+  const defaultMealH=c.type==='work'?(getCellMealH(c,selStore,dow)||''):'';
+  const defaultWorkH=c.type==='work'?(getCellInStoreH(c,selStore,dow)||''):'';
 
   showModal(`
   <div class="modal">
@@ -2744,7 +2755,7 @@ function openCellEdit(staffId,day,y,m,returnPage){
         <select id="ce-shift" onchange="updateCellAutoHours('${staffId}',${day},${y},${m})">${shiftOptions}</select>
       </div>
       <div id="ce-hours-group" class="form-group" ${c.type!=='work'?'style="display:none"':''}>
-        <label>服勤時數 <span style="font-size:11px;color:var(--text2)">(自動計算，可手動覆蓋)</span></label>
+        <label>服勤時數 <span style="font-size:11px;color:var(--text2)">(在店時數＝含用餐，自動計算可覆蓋)</span></label>
         <input id="ce-workhours" type="number" step="0.5" min="0" max="16"
           value="${defaultWorkH}" placeholder="自動推算" style="width:100px">
         <span style="font-size:12px;color:var(--text2);margin-left:8px">小時</span>
@@ -2796,7 +2807,8 @@ function updateCellAutoHours(staffId,day,y,m){
   if(!store||!shift) return;
   const dow=getDOW(y,m,day);
   const calc=calcShiftHours(store,shift.code,dow);
-  if(!whEl.dataset.manual) whEl.value=calc.workH||'';
+  // [v15.1] 服勤欄顯示在店 = 淨 + 餐
+  if(!whEl.dataset.manual) whEl.value=(calc.workH!=null&&calc.workH!=='')?(calc.workH+(calc.mealH||0)):'';
   if(!mhEl.dataset.manual) mhEl.value=calc.mealH||'';
 }
 
@@ -2816,7 +2828,11 @@ function saveCellEdit(staffId,day,y,m,returnPage){
     const shift=STATE.shifts.find(x=>x.id===shiftId);
     const dow=getDOW(y,m,day);
     const auto=store&&shift?calcShiftHours(store,shift.code,dow):{workH:null,mealH:null};
-    const customH=whVal!==''&&whVal!=null&&parseFloat(whVal)!==auto.workH?parseFloat(whVal):undefined;
+    // [v15.1] 服勤欄輸入的是在店；淨工時 = 在店 − 用餐，存進 customHours。
+    // 餵 80h 上限與個人月工時的永遠是淨工時（customHours），在店只活在顯示層。
+    const mealNum=(mhVal!==''&&mhVal!=null)?parseFloat(mhVal):(auto.mealH!=null?auto.mealH:0);
+    const netH=(whVal!==''&&whVal!=null)?Math.round((parseFloat(whVal)-mealNum)*2)/2:null;
+    const customH=(netH!=null&&netH!==auto.workH)?netH:undefined;
     const customM=mhVal!==''&&mhVal!=null&&parseFloat(mhVal)!==auto.mealH?parseFloat(mhVal):undefined;
     const cell={type:'work',storeId,shiftId,note,locked};
     if(customH!=null) cell.customHours=customH;
@@ -4303,7 +4319,7 @@ async function exportExcelFormatted(y,m,gid,opts={}){
       const c=sd[d];
       const exStore=STATE.stores.find(x=>x.id===c?.storeId);
       const exDow=getDOW(y,m,d);
-      const h=getCellWorkH(c,exStore,exDow);
+      const h=getCellInStoreH(c,exStore,exDow); // [v15.1] 服勤列顯示在店；個人月工時另算淨工時
       const pidx=periods.find(p=>p.days.includes(d))?.idx||1;
       const isNewP=d>1&&(periods.find(p=>p.days.includes(d-1))?.idx||1)!==pidx;
       const bdr=isNewP?thickLeft():border();
